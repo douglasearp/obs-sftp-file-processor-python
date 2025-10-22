@@ -1,7 +1,7 @@
 """Configuration management for SFTP settings."""
 
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -15,9 +15,10 @@ class SFTPConfig(BaseSettings):
     key_path: Optional[str] = Field(None, description="Path to SSH private key")
     timeout: int = Field(30, description="Connection timeout in seconds")
     
-    class Config:
-        env_prefix = "SFTP_"
-        case_sensitive = False
+    model_config = ConfigDict(
+        env_prefix="SFTP_",
+        case_sensitive=False
+    )
 
 
 class AppConfig(BaseSettings):
@@ -31,9 +32,10 @@ class AppConfig(BaseSettings):
     # SFTP configuration
     sftp: SFTPConfig = Field(default_factory=SFTPConfig)
     
-    class Config:
-        env_prefix = "APP_"
-        case_sensitive = False
+    model_config = ConfigDict(
+        env_prefix="APP_",
+        case_sensitive=False
+    )
 
 
 # Global configuration instance
