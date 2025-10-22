@@ -93,6 +93,128 @@ async def list_files(
         )
 
 
+@app.get("/files/search/{file_name}", response_model=FileListResponse)
+async def search_files_by_name(
+    file_name: str,
+    sftp_service: SFTPService = Depends(get_sftp_service)
+):
+    """Search for files by name pattern."""
+    try:
+        with sftp_service:
+            # List all files in root directory
+            all_files = sftp_service.list_files(".")
+            
+            # Filter files that match the name pattern (case-insensitive)
+            matching_files = [
+                file_data for file_data in all_files
+                if file_name.lower() in file_data['name'].lower()
+            ]
+            
+            # Convert to FileInfo objects
+            files = [
+                FileInfo(
+                    name=file_data['name'],
+                    path=f"./{file_data['name']}",
+                    size=file_data['size'],
+                    modified=file_data['modified'],
+                    is_directory=file_data['is_directory'],
+                    permissions=file_data['permissions']
+                )
+                for file_data in matching_files
+            ]
+            
+            return FileListResponse(
+                path=".",
+                files=files,
+                total_count=len(files)
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to search files by name '{file_name}': {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to search files: {str(e)}"
+        )
+
+
+@app.get("/file/{file_name}", response_model=FileContent)
+async def get_file_by_name(
+    file_name: str,
+    sftp_service: SFTPService = Depends(get_sftp_service)
+):
+    """Get a specific file by exact name."""
+    try:
+        with sftp_service:
+            # Check if file exists
+            if not sftp_service.file_exists(file_name):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"File not found: {file_name}"
+                )
+            
+            # Get file info
+            file_info_data = sftp_service.get_file_info(file_name)
+            
+            # Skip directories
+            if file_info_data['is_directory']:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Path is a directory, not a file: {file_name}"
+                )
+            
+            # Read file content
+            content_bytes = sftp_service.read_file(file_name)
+            
+            # Detect content type
+            content_type, _ = mimetypes.guess_type(file_name)
+            if not content_type:
+                content_type = "application/octet-stream"
+            
+            # Try to decode as text
+            encoding = "utf-8"
+            try:
+                content = content_bytes.decode(encoding)
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try other encodings
+                for enc in ["latin-1", "cp1252", "iso-8859-1"]:
+                    try:
+                        content = content_bytes.decode(enc)
+                        encoding = enc
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    # If all text encodings fail, return as base64
+                    import base64
+                    content = base64.b64encode(content_bytes).decode('ascii')
+                    encoding = "base64"
+            
+            file_info = FileInfo(
+                name=file_info_data['name'],
+                path=file_info_data['path'],
+                size=file_info_data['size'],
+                modified=file_info_data['modified'],
+                is_directory=file_info_data['is_directory'],
+                permissions=file_info_data['permissions']
+            )
+            
+            return FileContent(
+                file_info=file_info,
+                content=content,
+                encoding=encoding,
+                content_type=content_type
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get file {file_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get file: {str(e)}"
+        )
+
+
 @app.get("/files/{file_path:path}", response_model=FileContent)
 async def read_file(
     file_path: str,
