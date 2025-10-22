@@ -1,0 +1,171 @@
+---
+alwaysApply: true
+---
+
+# @pythonrules.mdc - Python Cursor Rules
+
+
+## Virtual Environment Management
+- Always use UV (uv) for Python virtual environment management
+- When working with Python projects, automatically create and use UV virtual environments
+- Never use pip directly - always use UV for package management
+
+
+## Project Setup Instructions
+When starting a new Python project or working with an existing one:
+
+
+1. **Initialize UV project** (if not already done):
+   ```bash
+   uv init
+   ```
+
+
+2. **Create virtual environment**:
+   ```bash
+   uv venv
+   ```
+
+
+3. **Activate virtual environment**:
+   - Windows: `.venv\Scripts\activate`
+   - Unix/Mac: `source .venv/bin/activate`
+
+
+4. **Install dependencies**:
+   ```bash
+   uv add <package-name>
+   ```
+
+
+5. **Install development dependencies**:
+   ```bash
+   uv add --dev <package-name>
+   ```
+
+
+6. **Install from requirements.txt** (if exists):
+   ```bash
+   uv pip install -r requirements.txt
+   ```
+
+
+## Code Generation Guidelines
+- Always include proper virtual environment activation in any shell commands
+- Use UV commands for all Python package operations
+- Include UV setup instructions in README files for new projects
+- Prefer `pyproject.toml` over `requirements.txt` for dependency management
+
+
+## File Structure Preferences
+- Use `pyproject.toml` for project configuration and dependencies
+- Keep `requirements.txt` for compatibility if needed
+- Store virtual environment in `.venv/` directory
+- Add `.venv/` to `.gitignore`
+
+
+## Development Workflow
+- Always check if UV is installed before starting Python work
+- If UV is not installed, provide installation instructions:
+   ```bash
+   # Install UV
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # Or on Windows with PowerShell:
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+
+
+## Best Practices
+- Use UV for faster package installation and resolution
+- Leverage UV's lock file for reproducible builds
+- Use `uv run` for running scripts in the virtual environment
+- Prefer UV's built-in Python version management when needed
+
+
+## Error Handling
+- If virtual environment issues occur, suggest recreating with `uv venv --force`
+- Always verify UV installation and version compatibility
+- Provide fallback to standard venv only if UV is unavailable
+
+
+## FastAPI Specific Rules
+- Always use async/await patterns for FastAPI endpoints
+- Include proper error handling with HTTPException
+- Use Pydantic models for request/response validation
+- Include comprehensive logging for debugging
+- Follow RESTful API design principles
+- Include proper API documentation with docstrings
+
+
+## SFTP Integration Rules
+- Use paramiko for SFTP connections
+- Implement proper connection management (connect/close)
+- Use thread pools for blocking SFTP operations in async contexts
+- Include timeout handling for network operations
+- Log all SFTP operations for debugging
+- Handle authentication errors gracefully
+
+
+## File Management Rules
+- Store downloaded files in a dedicated `downloads/` directory
+- Include file size and metadata in API responses
+- Implement proper file cleanup mechanisms
+- Use proper file encoding (UTF-8) for text files
+- Include file existence checks before operations
+
+
+## Python Code Style
+- Follow PEP 8 style guidelines
+- Use type hints for function parameters and return values
+- Include docstrings for all functions and classes
+- Use meaningful variable and function names
+- Keep functions small and focused on single responsibilities
+- Use list comprehensions and generator expressions when appropriate
+
+
+## Import Organization
+- Group imports in the following order:
+  1. Standard library imports
+  2. Third-party imports
+  3. Local application imports
+- Use absolute imports when possible
+- Avoid wildcard imports (`from module import *`)
+
+
+## Error Handling Best Practices
+- Use specific exception types rather than bare `except:` clauses
+- Log errors with appropriate detail levels
+- Provide meaningful error messages to users
+- Use try-except-finally blocks for resource cleanup
+- Consider using context managers for resource management
+
+
+## Project-Specific Python Rules
+- Main application: `main.py`
+- Virtual environment: `.venv/`
+- Configuration: `pyproject.toml`
+
+
+## API Endpoints (Python/FastAPI)
+- `GET /` - Root endpoint
+- `GET /health` - Health check
+
+
+
+
+## Security Considerations (Python)
+- Handle SFTP credentials securely
+- Validate all input parameters
+- Use proper error messages without exposing sensitive information
+- Implement proper authentication for production use
+
+
+## Documentation (Python)
+- Include comprehensive docstrings for all functions
+- Maintain up-to-date README.md
+- Document API endpoints with proper descriptions
+- Include usage examples in documentation
+
+
+
+

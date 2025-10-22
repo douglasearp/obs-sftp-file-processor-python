@@ -1,0 +1,107 @@
+---
+description: GitHub repository configuration and .gitignore rules for this project
+globs: "**/*"
+alwaysApply: true
+---
+
+# GitHub Repository Rules
+
+## .gitignore Configuration
+
+This project uses a comprehensive .gitignore file that covers multiple development scenarios and deployment platforms.
+
+### Dependencies
+- `node_modules/` - Node.js dependencies
+- `npm-debug.log*`, `yarn-debug.log*`, `yarn-error.log*`, `pnpm-debug.log*`, `lerna-debug.log*` - Package manager debug logs
+
+### Build Outputs
+- `dist/`, `build/` - Standard build directories
+- `.next/`, `out/` - Next.js and static site outputs
+- `public` - Gatsby public directory
+
+### Environment Variables
+- `.env*` - All environment variable files
+- `.env.local`, `.env.development.local`, `.env.test.local`, `.env.production.local` - Environment-specific configs
+
+### IDE and Editor Files
+- `.vscode/`, `.idea/` - IDE configuration directories
+- `*.swp`, `*.swo`, `*~` - Vim temporary files
+
+### Operating System Files
+- `.DS_Store`, `.DS_Store?`, `._*` - macOS system files
+- `.Spotlight-V100`, `.Trashes` - macOS metadata
+- `ehthumbs.db`, `Thumbs.db` - Windows thumbnail cache
+
+### Logs and Runtime Data
+- `logs/`, `*.log` - Application logs
+- `pids/`, `*.pid`, `*.seed`, `*.pid.lock` - Process ID files
+
+### Testing and Coverage
+- `coverage/`, `*.lcov` - Test coverage reports
+- `.nyc_output/` - NYC test coverage output
+
+### Package Manager Caches
+- `.npm`, `.eslintcache` - NPM and ESLint caches
+- `.rpt2_cache/`, `.rts2_cache_*` - TypeScript compilation caches
+- `.node_repl_history` - Node.js REPL history
+- `*.tgz` - NPM package archives
+- `.yarn-integrity` - Yarn integrity file
+
+### Build Tool Caches
+- `.cache/`, `.parcel-cache` - Parcel bundler cache
+- `.next` - Next.js build cache
+- `.nuxt` - Nuxt.js build cache
+- `.out`, `.storybook-out` - Storybook outputs
+
+### Temporary Directories
+- `tmp/`, `temp/` - Temporary file directories
+
+### Deployment Platforms
+- `.vercel` - Vercel deployment configuration
+- `*.tsbuildinfo` - TypeScript build information
+
+## Repository Structure Rules
+
+### File Organization
+- Keep source code in `src/` directory
+- Place configuration files in project root
+- Use descriptive directory names
+- Maintain consistent file naming conventions
+
+### Documentation
+- Include README.md in project root
+- Document setup and deployment procedures
+- Use conventional commit messages
+- Maintain changelog for significant updates
+
+### Security
+- Never commit sensitive environment variables
+- Use .env files for local configuration
+- Keep API keys and secrets out of version control
+- Review .gitignore regularly for completeness
+
+### Deployment
+- Configure deployment platforms (Vercel, Netlify, etc.)
+- Use proper build commands and output directories
+- Test deployment configurations locally
+- Monitor build logs for issues
+
+## Best Practices
+
+### .gitignore Maintenance
+- Review and update .gitignore regularly
+- Add new patterns as project evolves
+- Test .gitignore effectiveness
+- Document any custom patterns
+
+### Repository Hygiene
+- Keep repository size manageable
+- Remove unnecessary files from history if needed
+- Use .gitattributes for line ending consistency
+- Implement proper branching strategies
+
+### Collaboration
+- Ensure all team members understand .gitignore rules
+- Document any custom ignore patterns
+- Use consistent .gitignore across similar projects
+- Review ignored files periodically
