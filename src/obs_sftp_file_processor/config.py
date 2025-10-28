@@ -3,6 +3,7 @@
 from typing import Optional
 from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
+from .oracle_config import OracleConfig
 
 
 class SFTPConfig(BaseSettings):
@@ -31,6 +32,9 @@ class AppConfig(BaseSettings):
     
     # SFTP configuration
     sftp: SFTPConfig = Field(default_factory=SFTPConfig)
+    
+    # Oracle configuration
+    oracle: OracleConfig = Field(default_factory=OracleConfig)
     
     model_config = ConfigDict(
         env_prefix="APP_",

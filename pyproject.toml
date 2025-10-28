@@ -21,6 +21,8 @@ dependencies = [
     "loguru>=0.7.0",
     "httpx>=0.25.0",
     "requests>=2.32.4",
+    "oracledb>=3.0.0",
+    "sqlalchemy>=2.0.44",
 ]
 
 [project.optional-dependencies]
