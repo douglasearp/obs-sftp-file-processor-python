@@ -1,0 +1,8 @@
+TASK000001-FASTAPI
+
+Create FastAPI POST for /oracle/ach-files-update-by-file-id
+With parameters of file_id, file_contents, updated_by_user default “system-user”, updated_date default current_timestamp
+
+Call out to oracle and execute this action to update the ACH_FILES table where FILE_id = the parameter file-id
+
+Create a test to make sure it works called test_oracle_ach_files_update to make the update is in ACH_FILES and a correspsonding AUDIT_ACH_FILES table record was created for the FILE_id

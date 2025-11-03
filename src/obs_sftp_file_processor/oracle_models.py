@@ -60,3 +60,11 @@ class AchFileListResponse(BaseModel):
     
     files: list[AchFileResponse]
     total_count: int
+
+
+class AchFileUpdateByFileIdRequest(BaseModel):
+    """Model for updating ACH_FILES by file_id."""
+    
+    file_contents: str = Field(..., description="File contents to update")
+    updated_by_user: str = Field("system-user", description="User who updated the record")
+    updated_date: Optional[datetime] = Field(None, description="Update timestamp (defaults to CURRENT_TIMESTAMP if not provided)")

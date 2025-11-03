@@ -254,6 +254,109 @@ class OracleService:
             logger.error(f"Failed to update ACH_FILES record {file_id}: {e}")
             raise
     
+    def update_ach_file_by_file_id(
+        self, 
+        file_id: int, 
+        file_contents: str, 
+        updated_by_user: str = "system-user",
+        updated_date: Optional[datetime] = None
+    ) -> bool:
+        """Update ACH_FILES record by file_id with file_contents, updated_by_user, and updated_date."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build update statement
+                if updated_date is not None:
+                    update_sql = """
+                    UPDATE ACH_FILES 
+                    SET FILE_CONTENTS = :file_contents,
+                        UPDATED_BY_USER = :updated_by_user,
+                        UPDATED_DATE = :updated_date
+                    WHERE FILE_ID = :file_id
+                    """
+                    params = {
+                        'file_id': file_id,
+                        'file_contents': file_contents,
+                        'updated_by_user': updated_by_user,
+                        'updated_date': updated_date
+                    }
+                else:
+                    update_sql = """
+                    UPDATE ACH_FILES 
+                    SET FILE_CONTENTS = :file_contents,
+                        UPDATED_BY_USER = :updated_by_user,
+                        UPDATED_DATE = CURRENT_TIMESTAMP
+                    WHERE FILE_ID = :file_id
+                    """
+                    params = {
+                        'file_id': file_id,
+                        'file_contents': file_contents,
+                        'updated_by_user': updated_by_user
+                    }
+                
+                cursor.execute(update_sql, params)
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Updated ACH_FILES record {file_id} by file_id, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to update ACH_FILES record {file_id} by file_id: {e}")
+            raise
+    
+    def get_audit_ach_files_by_file_id(self, file_id: int) -> List[Dict[str, Any]]:
+        """Get AUDIT_ACH_FILES records for a specific file_id."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                select_sql = """
+                SELECT 
+                    AUDIT_ID,
+                    FILE_ID,
+                    ORIGINAL_FILENAME,
+                    PROCESSING_STATUS,
+                    FILE_CONTENTS,
+                    CREATED_BY_USER,
+                    CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE
+                FROM AUDIT_ACH_FILES 
+                WHERE FILE_ID = :file_id
+                ORDER BY AUDIT_ID DESC
+                """
+                
+                cursor.execute(select_sql, {'file_id': file_id})
+                rows = cursor.fetchall()
+                
+                audit_records = []
+                for row in rows:
+                    # Handle CLOB data - convert LOB to string
+                    file_contents = row[4]
+                    if hasattr(file_contents, 'read'):
+                        file_contents = file_contents.read()
+                    
+                    audit_records.append({
+                        'audit_id': row[0],
+                        'file_id': row[1],
+                        'original_filename': row[2],
+                        'processing_status': row[3],
+                        'file_contents': file_contents,
+                        'created_by_user': row[5],
+                        'created_date': row[6],
+                        'updated_by_user': row[7],
+                        'updated_date': row[8]
+                    })
+                
+                logger.info(f"Retrieved {len(audit_records)} AUDIT_ACH_FILES records for FILE_ID: {file_id}")
+                return audit_records
+                
+        except Exception as e:
+            logger.error(f"Failed to get AUDIT_ACH_FILES records for FILE_ID {file_id}: {e}")
+            raise
+    
     def delete_ach_file(self, file_id: int) -> bool:
         """Delete an ACH_FILES record."""
         try:

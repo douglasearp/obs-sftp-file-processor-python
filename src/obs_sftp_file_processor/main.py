@@ -10,7 +10,7 @@ from .config import config
 from .models import FileContent, FileListResponse, HealthResponse, ErrorResponse, FileInfo
 from .sftp_service import SFTPService
 from .oracle_service import OracleService
-from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse
+from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest
 from .ach_file_lines_service import AchFileLinesService
 from .ach_validator import parse_ach_file_content
 
@@ -413,6 +413,42 @@ async def update_ach_file(
                     detail=f"ACH_FILES record not found: {file_id}"
                 )
             
+            updated_file = oracle_service.get_ach_file(file_id)
+            return updated_file
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update ACH_FILES record {file_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update ACH_FILES record: {str(e)}"
+        )
+
+
+@app.post("/oracle/ach-files-update-by-file-id/{file_id}")
+async def update_ach_file_by_file_id(
+    file_id: int,
+    request: AchFileUpdateByFileIdRequest,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Update ACH_FILES record by file_id with file_contents, updated_by_user, and updated_date."""
+    try:
+        with oracle_service:
+            success = oracle_service.update_ach_file_by_file_id(
+                file_id=file_id,
+                file_contents=request.file_contents,
+                updated_by_user=request.updated_by_user,
+                updated_date=request.updated_date
+            )
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ACH_FILES record not found: {file_id}"
+                )
+            
+            # Get the updated record
             updated_file = oracle_service.get_ach_file(file_id)
             return updated_file
             
