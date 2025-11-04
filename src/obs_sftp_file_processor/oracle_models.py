@@ -68,3 +68,20 @@ class AchFileUpdateByFileIdRequest(BaseModel):
     file_contents: str = Field(..., description="File contents to update")
     updated_by_user: str = Field("system-user", description="User who updated the record")
     updated_date: Optional[datetime] = Field(None, description="Update timestamp (defaults to CURRENT_TIMESTAMP if not provided)")
+
+
+class AchClientResponse(BaseModel):
+    """Response model for ACH_CLIENTS."""
+    
+    client_id: str = Field(..., description="Client ID")
+    client_name: str = Field(..., description="Client name")
+    
+    class Config:
+        from_attributes = True
+
+
+class AchClientListResponse(BaseModel):
+    """Response model for ACH_CLIENTS list."""
+    
+    clients: list[AchClientResponse]
+    total_count: int

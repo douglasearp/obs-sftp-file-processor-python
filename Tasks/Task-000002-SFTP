@@ -1,0 +1,10 @@
+
+Host: 10.1.3.123:22 
+User: sftpuser1
+Password: TheNextB1gSFTP##
+
+files/addsftpachfile
+
+Create a api files/addsftpachfile process to POST a FILE_CONTENTS to the SFTP server by filename pattern CLIENTID_##########_FED_ACH_FILE_YYMMDDHHSS.txt
+
+Parameters are FILE_CONTENTS and CLIENTID that will replace ########## in filename pattern

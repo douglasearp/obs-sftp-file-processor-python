@@ -390,3 +390,35 @@ class OracleService:
         except Exception as e:
             logger.error(f"Failed to get ACH_FILES count: {e}")
             raise
+    
+    def get_active_clients(self) -> List[Dict[str, Any]]:
+        """Get active clients from ACH_CLIENTS table where CLIENT_STATUS = 'Active'."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                select_sql = f"""
+                SELECT 
+                    CLIENT_ID,
+                    CLIENT_NAME
+                FROM {self.config.schema}.ACH_CLIENTS
+                WHERE CLIENT_STATUS = 'Active'
+                ORDER BY CLIENT_NAME
+                """
+                
+                cursor.execute(select_sql)
+                rows = cursor.fetchall()
+                
+                clients = []
+                for row in rows:
+                    clients.append({
+                        'client_id': str(row[0]),
+                        'client_name': row[1]
+                    })
+                
+                logger.info(f"Retrieved {len(clients)} active clients from ACH_CLIENTS")
+                return clients
+                
+        except Exception as e:
+            logger.error(f"Failed to get active clients: {e}")
+            raise

@@ -9,10 +9,10 @@ from .oracle_config import OracleConfig
 class SFTPConfig(BaseSettings):
     """SFTP connection configuration."""
     
-    host: str = Field("obssftpazstoragesftp.blob.core.windows.net", description="SFTP server hostname")
+    host: str = Field("10.1.3.123", description="SFTP server hostname")
     port: int = Field(22, description="SFTP server port")
-    username: str = Field("obssftpazstoragesftp.container1.obssftpuser", description="SFTP username")
-    password: Optional[str] = Field("oqdIA++1/34vtWNNbylb5hm4zoRVz91X", description="SFTP password")
+    username: str = Field("sftpuser1", description="SFTP username")
+    password: Optional[str] = Field("TheNextB1gSFTP##", description="SFTP password")
     key_path: Optional[str] = Field(None, description="Path to SSH private key")
     timeout: int = Field(30, description="Connection timeout in seconds")
     

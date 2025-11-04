@@ -143,3 +143,28 @@ class SFTPService:
         except Exception as e:
             logger.error(f"Failed to get file info for {remote_path}: {e}")
             raise
+    
+    def write_file(self, remote_path: str, content: bytes) -> None:
+        """Write file content to remote path."""
+        if not self.sftp:
+            raise RuntimeError("SFTP connection not established")
+        
+        try:
+            # Ensure parent directory exists
+            remote_dir = str(Path(remote_path).parent)
+            if remote_dir != "." and remote_dir != "/":
+                try:
+                    self.sftp.stat(remote_dir)
+                except FileNotFoundError:
+                    # Create directory if it doesn't exist
+                    self.sftp.mkdir(remote_dir)
+            
+            # Write file content
+            with self.sftp.open(remote_path, 'wb') as remote_file:
+                remote_file.write(content)
+            
+            logger.info(f"Wrote {len(content)} bytes to {remote_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to write file {remote_path}: {e}")
+            raise

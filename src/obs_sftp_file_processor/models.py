@@ -47,3 +47,20 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="Service status")
     version: str = Field(..., description="Application version")
     timestamp: datetime = Field(default_factory=datetime.now, description="Check timestamp")
+
+
+class AddSftpAchFileRequest(BaseModel):
+    """Request model for adding ACH file to SFTP server."""
+    
+    file_contents: str = Field(..., description="File contents to upload")
+    client_id: str = Field(..., description="Client ID to use in filename pattern")
+
+
+class AddSftpAchFileResponse(BaseModel):
+    """Response model for adding ACH file to SFTP server."""
+    
+    success: bool = Field(..., description="Whether the upload was successful")
+    filename: str = Field(..., description="Generated filename")
+    remote_path: str = Field(..., description="Remote path where file was uploaded")
+    file_size: int = Field(..., description="Size of uploaded file in bytes")
+    message: str = Field(..., description="Success or error message")

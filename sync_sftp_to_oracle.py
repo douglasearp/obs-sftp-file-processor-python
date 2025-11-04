@@ -29,7 +29,7 @@ class SftpToOracleSync:
     def get_sftp_files(self) -> List[Dict[str, Any]]:
         """Get list of files from SFTP via API."""
         try:
-            response = requests.get(f"{self.api_base_url}/files")
+            response = requests.get(f"{self.api_base_url}/files?path=upload")
             response.raise_for_status()
             data = response.json()
             return data.get('files', [])
@@ -40,7 +40,9 @@ class SftpToOracleSync:
     def get_file_content(self, filename: str) -> Dict[str, Any]:
         """Get file content from SFTP via API."""
         try:
-            response = requests.get(f"{self.api_base_url}/file/{filename}")
+            # Use full path from upload directory
+            file_path = f"upload/{filename}"
+            response = requests.get(f"{self.api_base_url}/file/{file_path}")
             response.raise_for_status()
             return response.json()
         except Exception as e:

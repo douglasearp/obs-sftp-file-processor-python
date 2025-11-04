@@ -1,16 +1,17 @@
 """Main FastAPI application."""
 
 import mimetypes
+from datetime import datetime
 from typing import List
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from loguru import logger
 
 from .config import config
-from .models import FileContent, FileListResponse, HealthResponse, ErrorResponse, FileInfo
+from .models import FileContent, FileListResponse, HealthResponse, ErrorResponse, FileInfo, AddSftpAchFileRequest, AddSftpAchFileResponse
 from .sftp_service import SFTPService
 from .oracle_service import OracleService
-from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest
+from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest, AchClientResponse, AchClientListResponse
 from .ach_file_lines_service import AchFileLinesService
 from .ach_validator import parse_ach_file_content
 
@@ -74,10 +75,10 @@ async def health():
 
 @app.get("/files", response_model=FileListResponse)
 async def list_files(
-    path: str = ".",
+    path: str = "upload",
     sftp_service: SFTPService = Depends(get_sftp_service)
 ):
-    """List files in the specified remote directory."""
+    """List files in the specified remote directory. Defaults to 'upload' directory."""
     try:
         with sftp_service:
             files_data = sftp_service.list_files(path)
@@ -226,6 +227,46 @@ async def get_file_by_name(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get file: {str(e)}"
+        )
+
+
+@app.post("/files/addsftpachfile", response_model=AddSftpAchFileResponse)
+async def add_sftp_ach_file(
+    request: AddSftpAchFileRequest,
+    sftp_service: SFTPService = Depends(get_sftp_service)
+):
+    """Upload ACH file to SFTP server with filename pattern CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.txt"""
+    try:
+        # Generate filename with pattern: CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.txt
+        # YYMMDDHHSS format: YY (year), MM (month), DD (day), HH (hour), MM (minute) = 10 digits
+        timestamp = datetime.now().strftime("%y%m%d%H%M")
+        filename = f"CLIENTID_{request.client_id}_FED_ACH_FILE_{timestamp}.txt"
+        
+        # Remote path - upload to the uploads directory
+        remote_path = f"upload/{filename}"
+        
+        # Convert file contents to bytes
+        file_contents_bytes = request.file_contents.encode('utf-8')
+        
+        with sftp_service:
+            # Write file to SFTP server
+            sftp_service.write_file(remote_path, file_contents_bytes)
+            
+            logger.info(f"Successfully uploaded ACH file to SFTP: {remote_path}")
+            
+            return AddSftpAchFileResponse(
+                success=True,
+                filename=filename,
+                remote_path=remote_path,
+                file_size=len(file_contents_bytes),
+                message=f"File {filename} uploaded successfully to {remote_path}"
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to upload ACH file to SFTP: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to upload file to SFTP: {str(e)}"
         )
 
 
@@ -490,6 +531,36 @@ async def delete_ach_file(
         )
 
 
+@app.get("/oracle/clients", response_model=AchClientListResponse)
+async def get_active_clients(
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get active clients from ACH_CLIENTS table where CLIENT_STATUS = 'Active'."""
+    try:
+        with oracle_service:
+            clients_data = oracle_service.get_active_clients()
+            
+            clients = [
+                AchClientResponse(
+                    client_id=client['client_id'],
+                    client_name=client['client_name']
+                )
+                for client in clients_data
+            ]
+            
+            return AchClientListResponse(
+                clients=clients,
+                total_count=len(clients)
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get active clients: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get active clients: {str(e)}"
+        )
+
+
 @app.post("/sync/sftp-to-oracle")
 async def sync_sftp_to_oracle(
     oracle_service: OracleService = Depends(get_oracle_service),
@@ -505,8 +576,8 @@ async def sync_sftp_to_oracle(
         }
         
         with oracle_service, sftp_service:
-            # Get list of files from SFTP
-            sftp_files = sftp_service.list_files(".")
+            # Get list of files from SFTP upload directory
+            sftp_files = sftp_service.list_files("upload")
             results['total_files'] = len(sftp_files)
             
             # Process each file
@@ -518,8 +589,9 @@ async def sync_sftp_to_oracle(
                     continue
                 
                 try:
-                    # Get file content
-                    content_bytes = sftp_service.read_file(filename)
+                    # Get file content - use full path from upload directory
+                    file_path = f"upload/{filename}"
+                    content_bytes = sftp_service.read_file(file_path)
                     
                     # Try to decode as text
                     try:
@@ -595,8 +667,8 @@ async def run_sync_process(
         
         # Step 1: SFTP to Oracle Sync
         with oracle_service, sftp_service:
-            # Get list of files from SFTP
-            sftp_files = sftp_service.list_files(".")
+            # Get list of files from SFTP upload directory
+            sftp_files = sftp_service.list_files("upload")
             results['sync_results']['total_files'] = len(sftp_files)
             
             # Process each file
@@ -608,8 +680,9 @@ async def run_sync_process(
                     continue
                 
                 try:
-                    # Get file content
-                    content_bytes = sftp_service.read_file(filename)
+                    # Get file content - use full path from upload directory
+                    file_path = f"upload/{filename}"
+                    content_bytes = sftp_service.read_file(file_path)
                     
                     # Try to decode as text
                     try:
