@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  obs-sftp-file-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: obs-sftp-file-processor
+    ports:
+      - "8001:8000"
+    environment:
+      # SFTP Configuration
+      - SFTP_HOST=${SFTP_HOST:-10.1.3.123}
+      - SFTP_PORT=${SFTP_PORT:-22}
+      - SFTP_USERNAME=${SFTP_USERNAME:-sftpuser1}
+      - SFTP_PASSWORD=${SFTP_PASSWORD}
+      
+      # Oracle Configuration
+      - ORACLE_HOST=${ORACLE_HOST:-10.1.0.111}
+      - ORACLE_PORT=${ORACLE_PORT:-1521}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USERNAME=${ORACLE_USERNAME}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - ORACLE_SCHEMA=${ORACLE_SCHEMA:-ACHOWNER}
+      - ORACLE_HOME=/opt/oracle/instantclient_23_3
+      
+      # Application Configuration
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - APP_LOG_LEVEL=${APP_LOG_LEVEL:-INFO}
+      
+      # Python
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Mount logs directory for persistence
+      - ./logs:/app/logs
+      # Mount Oracle Instant Client if located locally (uncomment and adjust path)
+      # - ${ORACLE_HOME:-~/oracle/instantclient_23_3}:/opt/oracle/instantclient_23_3:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - obs-network
+
+networks:
+  obs-network:
+    driver: bridge
