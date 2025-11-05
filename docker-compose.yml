@@ -13,9 +13,14 @@ services:
       - "8001:8000"
     environment:
       # SFTP Configuration
+      # Previous defaults (commented out):
+      # - SFTP_HOST=${SFTP_HOST:-10.1.3.123}
+      # - SFTP_PORT=${SFTP_PORT:-22}
+      # - SFTP_USERNAME=${SFTP_USERNAME:-sftpuser1}
+      # Current defaults:
       - SFTP_HOST=${SFTP_HOST:-10.1.3.123}
-      - SFTP_PORT=${SFTP_PORT:-22}
-      - SFTP_USERNAME=${SFTP_USERNAME:-sftpuser1}
+      - SFTP_PORT=${SFTP_PORT:-2022}
+      - SFTP_USERNAME=${SFTP_USERNAME:-6001_obstest}
       - SFTP_PASSWORD=${SFTP_PASSWORD}
       
       # Oracle Configuration
