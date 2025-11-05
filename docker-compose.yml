@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    platform: linux/amd64
     container_name: obs-sftp-file-processor
     ports:
       - "8001:8000"
@@ -33,8 +36,14 @@ services:
     volumes:
       # Mount logs directory for persistence
       - ./logs:/app/logs
-      # Mount Oracle Instant Client if located locally (uncomment and adjust path)
-      # - ${ORACLE_HOME:-~/oracle/instantclient_23_3}:/opt/oracle/instantclient_23_3:ro
+      # Mount Oracle Instant Client (Linux x86-64 version required for Docker container)
+      # Option 1: If you have Linux Oracle Instant Client extracted locally, uncomment and adjust path:
+      - ${ORACLE_INSTANTCLIENT_PATH:-./oracle/instantclient_23_3}:/opt/oracle/instantclient_23_3:ro
+      # Option 2: Download Linux x86-64 Oracle Instant Client:
+      #   1. Visit: https://www.oracle.com/database/technologies/instant-client/linux-x86-64-downloads.html
+      #   2. Accept license and download "Basic Package" (instantclient-basic-linux.x64-*.zip)
+      #   3. Extract to ./oracle/instantclient_23_3/ in project root
+      #   4. Uncomment the volume mount above
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
