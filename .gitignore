@@ -196,3 +196,4 @@ logs/
 id_rsa*
 id_ed25519*
 oracle/
+obs-sftp-file-processor-portainer.tar*
