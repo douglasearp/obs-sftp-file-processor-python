@@ -212,4 +212,48 @@ class AchFileBlobsService:
         except Exception as e:
             logger.error(f"Failed to get ACH_FILES_BLOBS record: {e}")
             raise
+    
+    def get_ach_file_blob_by_file_id(self, file_id: int) -> Optional[AchFileBlobResponse]:
+        """Get an ACH_FILES_BLOBS record by FILE_ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                select_sql = """
+                SELECT 
+                    FILE_BLOB_ID,
+                    FILE_ID,
+                    ORIGINAL_FILENAME,
+                    PROCESSING_STATUS,
+                    FILE_CONTENTS,
+                    CREATED_BY_USER,
+                    CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE
+                FROM ACH_FILES_BLOBS
+                WHERE FILE_ID = :file_id
+                ORDER BY CREATED_DATE DESC
+                FETCH FIRST 1 ROWS ONLY
+                """
+                
+                cursor.execute(select_sql, {'file_id': file_id})
+                row = cursor.fetchone()
+                
+                if row:
+                    return AchFileBlobResponse(
+                        file_blob_id=row[0],
+                        file_id=row[1],
+                        original_filename=row[2],
+                        processing_status=row[3],
+                        file_contents=row[4].read() if row[4] else None,
+                        created_by_user=row[5],
+                        created_date=row[6],
+                        updated_by_user=row[7],
+                        updated_date=row[8]
+                    )
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get ACH_FILES_BLOBS record by FILE_ID: {e}")
+            raise
 

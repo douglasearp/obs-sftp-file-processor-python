@@ -4,7 +4,7 @@ import mimetypes
 from datetime import datetime
 from typing import List
 from fastapi import FastAPI, HTTPException, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
@@ -20,7 +20,7 @@ from .oracle_service import OracleService
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest, AchClientResponse, AchClientListResponse
 from .ach_file_lines_service import AchFileLinesService
 from .ach_file_blobs_service import AchFileBlobsService
-from .ach_file_blobs_models import AchFileBlobCreate
+from .ach_file_blobs_models import AchFileBlobCreate, AchFileBlobResponse
 from .ach_validator import parse_ach_file_content
 from .file_utils import add_client_id_to_filename
 
@@ -743,6 +743,103 @@ async def get_ach_file(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get ACH_FILES record: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-files/{file_id}/download")
+async def download_ach_file_blob(
+    file_id: int,
+    ach_file_blobs_service: AchFileBlobsService = Depends(get_ach_file_blobs_service)
+):
+    """Download file from ACH_FILES_BLOBS by FILE_ID with original filename."""
+    try:
+        with ach_file_blobs_service:
+            file_blob = ach_file_blobs_service.get_ach_file_blob_by_file_id(file_id)
+            
+            if not file_blob:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ACH_FILES_BLOBS record not found for FILE_ID: {file_id}"
+                )
+            
+            if not file_blob.file_contents:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"File contents not found for FILE_ID: {file_id}"
+                )
+            
+            # Return file as downloadable response with original filename
+            return Response(
+                content=file_blob.file_contents.encode('utf-8'),
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{file_blob.original_filename}"'
+                }
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download ACH_FILES_BLOBS for FILE_ID {file_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to download file: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-files-blobs/{file_blob_id}", response_model=AchFileBlobResponse)
+async def get_ach_file_blob(
+    file_blob_id: int,
+    ach_file_blobs_service: AchFileBlobsService = Depends(get_ach_file_blobs_service)
+):
+    """Get a specific ACH_FILES_BLOBS record by FILE_BLOB_ID."""
+    try:
+        with ach_file_blobs_service:
+            file_blob = ach_file_blobs_service.get_ach_file_blob(file_blob_id)
+            
+            if not file_blob:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ACH_FILES_BLOBS record not found: {file_blob_id}"
+                )
+            
+            return file_blob
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get ACH_FILES_BLOBS record {file_blob_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get ACH_FILES_BLOBS record: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-files-blobs/file-id/{file_id}", response_model=AchFileBlobResponse)
+async def get_ach_file_blob_by_file_id(
+    file_id: int,
+    ach_file_blobs_service: AchFileBlobsService = Depends(get_ach_file_blobs_service)
+):
+    """Get ACH_FILES_BLOBS record by FILE_ID."""
+    try:
+        with ach_file_blobs_service:
+            file_blob = ach_file_blobs_service.get_ach_file_blob_by_file_id(file_id)
+            
+            if not file_blob:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ACH_FILES_BLOBS record not found for FILE_ID: {file_id}"
+                )
+            
+            return file_blob
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get ACH_FILES_BLOBS record by FILE_ID {file_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get ACH_FILES_BLOBS record: {str(e)}"
         )
 
 
