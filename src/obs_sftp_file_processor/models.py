@@ -64,3 +64,67 @@ class AddSftpAchFileResponse(BaseModel):
     remote_path: str = Field(..., description="Remote path where file was uploaded")
     file_size: int = Field(..., description="Size of uploaded file in bytes")
     message: str = Field(..., description="Success or error message")
+
+
+class ProcessSftpFileRequest(BaseModel):
+    """Request model for processing SFTP file."""
+    
+    file_name: str = Field(..., description="Name of the file to process from upload folder")
+    client_id: str = Field(..., description="Client ID to add to filename")
+    created_by_user: Optional[str] = Field(None, description="User who created the record (optional)")
+
+
+class ProcessSftpFileData(BaseModel):
+    """Data model for successful file processing response."""
+    
+    file_id: int = Field(..., description="ACH_FILES record ID")
+    file_blob_id: int = Field(..., description="ACH_FILES_BLOBS record ID")
+    original_filename: str = Field(..., description="Original filename")
+    renamed_filename: str = Field(..., description="Filename with client_id prefix")
+    processing_status: str = Field(..., description="Processing status")
+    archived_path: str = Field(..., description="Path to archived file")
+
+
+class ProcessSftpFileErrorDetails(BaseModel):
+    """Error details for file processing response."""
+    
+    file_id: Optional[int] = Field(None, description="ACH_FILES record ID if created")
+    file_blob_id: Optional[int] = Field(None, description="ACH_FILES_BLOBS record ID if created")
+    processing_status: str = Field(..., description="Processing status")
+    stage: str = Field(..., description="Stage where error occurred")
+
+
+class ProcessSftpFileResponse(BaseModel):
+    """Response model for processing SFTP file."""
+    
+    success: bool = Field(..., description="Whether processing was successful")
+    message: str = Field(..., description="Success or error message")
+    data: Optional[ProcessSftpFileData] = Field(None, description="Success data")
+    error: Optional[str] = Field(None, description="Error message if failed")
+    details: Optional[ProcessSftpFileErrorDetails] = Field(None, description="Error details if failed")
+
+
+class ArchivedFileInfo(BaseModel):
+    """Information about an archived file."""
+    
+    name: str = Field(..., description="File name")
+    size: int = Field(..., description="File size in bytes")
+    created_date: Optional[datetime] = Field(None, description="File creation date")
+    modified_date: datetime = Field(..., description="File modification date")
+
+
+class ArchivedFileListResponse(BaseModel):
+    """Response model for listing archived files."""
+    
+    files: List[ArchivedFileInfo] = Field(..., description="List of archived files")
+    total: int = Field(..., description="Total number of files")
+    limit: int = Field(..., description="Limit applied")
+    offset: int = Field(..., description="Offset applied")
+
+
+class ArchivedFileContentResponse(BaseModel):
+    """Response model for archived file content."""
+    
+    file_name: str = Field(..., description="File name")
+    content: str = Field(..., description="File content as string")
+    size: int = Field(..., description="File size in bytes")

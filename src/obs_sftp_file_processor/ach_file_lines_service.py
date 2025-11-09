@@ -18,31 +18,56 @@ class AchFileLinesService:
         self.pool: Optional[oracledb.ConnectionPool] = None
     
     def connect(self) -> None:
-        """Establish Oracle connection pool."""
+        """Establish Oracle connection pool.
+        
+        Uses thin mode by default (no Oracle Instant Client required).
+        If ORACLE_HOME is set, will attempt to use thick mode for encryption support.
+        """
         try:
-            # Initialize thick mode for network encryption support
-            try:
-                oracledb.init_oracle_client(lib_dir=os.environ.get('ORACLE_HOME'))
-                logger.info("Oracle thick mode initialized successfully")
-            except Exception as e:
-                logger.warning(f"Thick mode initialization failed: {e}")
-                # Try without lib_dir
-                try:
-                    oracledb.init_oracle_client()
-                    logger.info("Oracle thick mode initialized without lib_dir")
-                except Exception as e2:
-                    logger.error(f"Failed to initialize thick mode: {e2}")
-                    raise
+            # Check if Oracle Instant Client is available (thick mode)
+            oracle_home = os.environ.get('ORACLE_HOME')
+            use_thick_mode = False
             
-            # Create connection pool
-            self.pool = oracledb.create_pool(
-                user=self.config.username,
-                password=self.config.password,
-                dsn=self.config.dsn,
-                min=self.config.min_pool_size,
-                max=self.config.max_pool_size,
-                increment=self.config.pool_increment
-            )
+            if oracle_home:
+                try:
+                    oracledb.init_oracle_client(lib_dir=oracle_home)
+                    logger.info(f"Using Oracle thick mode (ORACLE_HOME={oracle_home})")
+                    use_thick_mode = True
+                except Exception as e:
+                    logger.warning(f"Thick mode initialization failed: {e}")
+                    logger.info("Falling back to thin mode")
+                    # Try without lib_dir
+                    try:
+                        oracledb.init_oracle_client()
+                        logger.info("Oracle thick mode initialized without lib_dir")
+                        use_thick_mode = True
+                    except Exception as e2:
+                        logger.warning(f"Thick mode fallback failed: {e2}")
+                        logger.info("Using thin mode (no encryption support)")
+                        # Don't raise - continue with thin mode
+            else:
+                logger.info("Using Oracle thin mode (no Instant Client required)")
+            
+            # Create connection pool with optional TLS/SSL configuration
+            pool_params = {
+                'user': self.config.username,
+                'password': self.config.password,
+                'dsn': self.config.dsn,
+                'min': self.config.min_pool_size,
+                'max': self.config.max_pool_size,
+                'increment': self.config.pool_increment
+            }
+            
+            # Add TLS/SSL configuration if provided
+            if self.config.config_dir:
+                pool_params['config_dir'] = self.config.config_dir
+                logger.info(f"Using Oracle config directory: {self.config.config_dir}")
+            
+            if self.config.wallet_location:
+                pool_params['wallet_location'] = self.config.wallet_location
+                logger.info(f"Using Oracle wallet location: {self.config.wallet_location}")
+            
+            self.pool = oracledb.create_pool(**pool_params)
             logger.info("Oracle connection pool established successfully")
             
         except Exception as e:

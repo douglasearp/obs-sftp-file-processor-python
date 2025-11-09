@@ -24,6 +24,10 @@ class OracleConfig(BaseSettings):
     connect_timeout: int = Field(30, description="Connection timeout in seconds")
     read_timeout: int = Field(30, description="Read timeout in seconds")
     
+    # TLS/SSL Configuration (optional)
+    config_dir: Optional[str] = Field(None, description="Directory containing sqlnet.ora and tnsnames.ora (e.g., $ORACLE_HOME/network/admin)")
+    wallet_location: Optional[str] = Field(None, description="Path to Oracle wallet for SSL/TLS authentication")
+    
     model_config = ConfigDict(
         env_prefix = "ORACLE_",
         case_sensitive = False

@@ -168,3 +168,48 @@ class SFTPService:
         except Exception as e:
             logger.error(f"Failed to write file {remote_path}: {e}")
             raise
+    
+    def move_file(self, source_path: str, dest_path: str) -> None:
+        """Move file from source_path to dest_path on SFTP server."""
+        if not self.sftp:
+            raise RuntimeError("SFTP connection not established")
+        
+        try:
+            # Ensure destination directory exists
+            dest_dir = str(Path(dest_path).parent)
+            if dest_dir != "." and dest_dir != "/":
+                self.ensure_directory_exists(dest_dir)
+            
+            # Move file (rename)
+            self.sftp.rename(source_path, dest_path)
+            logger.info(f"Moved file from {source_path} to {dest_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to move file from {source_path} to {dest_path}: {e}")
+            raise
+    
+    def ensure_directory_exists(self, remote_path: str) -> None:
+        """Ensure directory exists on SFTP server, creating it if necessary."""
+        if not self.sftp:
+            raise RuntimeError("SFTP connection not established")
+        
+        try:
+            # Check if directory exists
+            try:
+                self.sftp.stat(remote_path)
+                # Directory exists
+                return
+            except FileNotFoundError:
+                # Directory doesn't exist, create it
+                # Create parent directories first if needed
+                parent = str(Path(remote_path).parent)
+                if parent != "." and parent != "/" and parent != remote_path:
+                    self.ensure_directory_exists(parent)
+                
+                # Create the directory
+                self.sftp.mkdir(remote_path)
+                logger.info(f"Created directory: {remote_path}")
+                
+        except Exception as e:
+            logger.error(f"Failed to ensure directory exists: {remote_path}: {e}")
+            raise

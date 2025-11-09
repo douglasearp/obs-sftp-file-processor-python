@@ -22,6 +22,8 @@ class SFTPConfig(BaseSettings):
     password: Optional[str] = Field('OEL%7@71ov6I0@=V"`Tn', description="SFTP password")
     key_path: Optional[str] = Field(None, description="Path to SSH private key")
     timeout: int = Field(30, description="Connection timeout in seconds")
+    upload_folder: str = Field("upload", description="Path to upload folder")
+    archived_folder: str = Field("upload/archived", description="Path to archived folder (subfolder of upload)")
     
     model_config = ConfigDict(
         env_prefix="SFTP_",

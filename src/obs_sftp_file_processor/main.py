@@ -5,15 +5,24 @@ from datetime import datetime
 from typing import List
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from .config import config
-from .models import FileContent, FileListResponse, HealthResponse, ErrorResponse, FileInfo, AddSftpAchFileRequest, AddSftpAchFileResponse
+from .models import (
+    FileContent, FileListResponse, HealthResponse, ErrorResponse, FileInfo, 
+    AddSftpAchFileRequest, AddSftpAchFileResponse,
+    ProcessSftpFileRequest, ProcessSftpFileResponse, ProcessSftpFileData, ProcessSftpFileErrorDetails,
+    ArchivedFileListResponse, ArchivedFileContentResponse, ArchivedFileInfo
+)
 from .sftp_service import SFTPService
 from .oracle_service import OracleService
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest, AchClientResponse, AchClientListResponse
 from .ach_file_lines_service import AchFileLinesService
+from .ach_file_blobs_service import AchFileBlobsService
+from .ach_file_blobs_models import AchFileBlobCreate
 from .ach_validator import parse_ach_file_content
+from .file_utils import add_client_id_to_filename
 
 
 # Configure logging
@@ -39,6 +48,29 @@ app = FastAPI(
     debug=config.debug
 )
 
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Create archived folder on application startup if it doesn't exist."""
+    try:
+        sftp_service = SFTPService(config.sftp)
+        with sftp_service:
+            archived_folder = config.sftp.archived_folder
+            sftp_service.ensure_directory_exists(archived_folder)
+            logger.info(f"Archived folder '{archived_folder}' verified/created on startup")
+    except Exception as e:
+        logger.warning(f"Could not create archived folder on startup: {e}")
+        # Don't fail startup if folder creation fails - it will be created when needed
+
 
 def get_sftp_service() -> SFTPService:
     """Dependency to get SFTP service instance."""
@@ -53,6 +85,11 @@ def get_oracle_service() -> OracleService:
 def get_ach_file_lines_service() -> AchFileLinesService:
     """Dependency to get ACH file lines service instance."""
     return AchFileLinesService(config.oracle)
+
+
+def get_ach_file_blobs_service() -> AchFileBlobsService:
+    """Dependency to get ACH file blobs service instance."""
+    return AchFileBlobsService(config.oracle)
 
 
 @app.get("/", response_model=HealthResponse)
@@ -270,6 +307,292 @@ async def add_sftp_ach_file(
         )
 
 
+@app.post("/files/process-sftp-file", response_model=ProcessSftpFileResponse)
+async def process_sftp_file(
+    request: ProcessSftpFileRequest,
+    sftp_service: SFTPService = Depends(get_sftp_service),
+    oracle_service: OracleService = Depends(get_oracle_service),
+    ach_file_blobs_service: AchFileBlobsService = Depends(get_ach_file_blobs_service)
+):
+    """Process a file from the SFTP server, rename it with client ID, create database records, and archive the file."""
+    file_id = None
+    file_blob_id = None
+    renamed_filename = None
+    
+    try:
+        # Validate client_id exists
+        with oracle_service:
+            clients_data = oracle_service.get_active_clients()
+            # Handle both list of dicts (from service) and response object (from endpoint)
+            if isinstance(clients_data, list):
+                # Service returns list of dicts
+                client_ids = [client['client_id'] for client in clients_data]
+            else:
+                # Response object with .clients attribute
+                client_ids = [c.client_id for c in clients_data.clients]
+            
+            if request.client_id not in client_ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Client ID '{request.client_id}' not found in active clients"
+                )
+        
+        # Prepare file paths
+        upload_folder = config.sftp.upload_folder
+        archived_folder = config.sftp.archived_folder
+        source_path = f"{upload_folder}/{request.file_name}" if upload_folder != "." else request.file_name
+        
+        # Read file from SFTP server
+        with sftp_service:
+            # Check if file exists
+            if not sftp_service.file_exists(source_path):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"File not found: {source_path}"
+                )
+            
+            # Read file content
+            file_content_bytes = sftp_service.read_file(source_path)
+            file_content_str = file_content_bytes.decode('utf-8')
+        
+        # Generate renamed filename with client_id prefix
+        renamed_filename = add_client_id_to_filename(request.file_name, request.client_id)
+        archived_path = f"{archived_folder}/{renamed_filename}" if archived_folder != "." else renamed_filename
+        
+        # Set created_by_user
+        created_by_user = request.created_by_user or "system-user"
+        
+        # Create ACH_FILES record
+        try:
+            with oracle_service:
+                ach_file_create = AchFileCreate(
+                    original_filename=renamed_filename,
+                    processing_status="Pending",
+                    file_contents=file_content_str,
+                    created_by_user=created_by_user
+                )
+                file_id = oracle_service.create_ach_file(ach_file_create)
+                logger.info(f"Created ACH_FILES record with ID: {file_id}")
+        except Exception as e:
+            logger.error(f"Failed to create ACH_FILES record: {e}")
+            return ProcessSftpFileResponse(
+                success=False,
+                message="Failed to create ACH_FILES record",
+                error=str(e),
+                details=ProcessSftpFileErrorDetails(
+                    file_id=None,
+                    file_blob_id=None,
+                    processing_status="Failed",
+                    stage="file_creation"
+                )
+            )
+        
+        # Create ACH_FILES_BLOBS record
+        try:
+            with ach_file_blobs_service:
+                ach_file_blob_create = AchFileBlobCreate(
+                    file_id=file_id,
+                    original_filename=renamed_filename,
+                    processing_status="Pending",
+                    file_contents=file_content_str,
+                    created_by_user=created_by_user
+                )
+                file_blob_id = ach_file_blobs_service.create_ach_file_blob(ach_file_blob_create)
+                logger.info(f"Created ACH_FILES_BLOBS record with ID: {file_blob_id}")
+        except Exception as e:
+            logger.error(f"Failed to create ACH_FILES_BLOBS record: {e}")
+            # Update BLOB status to Failed
+            try:
+                with ach_file_blobs_service:
+                    if file_blob_id:
+                        ach_file_blobs_service.update_ach_file_blob_status(
+                            file_blob_id, "Failed", created_by_user
+                        )
+            except Exception as update_error:
+                logger.error(f"Failed to update BLOB status: {update_error}")
+            
+            return ProcessSftpFileResponse(
+                success=False,
+                message="Failed to create ACH_FILES_BLOBS record",
+                error=str(e),
+                details=ProcessSftpFileErrorDetails(
+                    file_id=file_id,
+                    file_blob_id=file_blob_id,
+                    processing_status="Failed",
+                    stage="blob_creation"
+                )
+            )
+        
+        # Update BLOB status to Completed
+        try:
+            with ach_file_blobs_service:
+                ach_file_blobs_service.update_ach_file_blob_status(
+                    file_blob_id, "Completed", created_by_user
+                )
+        except Exception as e:
+            logger.warning(f"Failed to update BLOB status to Completed: {e}")
+            # Continue anyway - BLOB was created successfully
+        
+        # Move file to archived folder
+        try:
+            with sftp_service:
+                # Ensure archived folder exists
+                sftp_service.ensure_directory_exists(archived_folder)
+                
+                # Move file
+                sftp_service.move_file(source_path, archived_path)
+                logger.info(f"Moved file from {source_path} to {archived_path}")
+        except Exception as e:
+            logger.error(f"Failed to move file to archived folder: {e}")
+            # File and BLOB were created successfully, but move failed
+            # Return partial success with warning
+            return ProcessSftpFileResponse(
+                success=True,
+                message=f"File processed successfully, but failed to move to archived folder: {str(e)}",
+                data=ProcessSftpFileData(
+                    file_id=file_id,
+                    file_blob_id=file_blob_id,
+                    original_filename=request.file_name,
+                    renamed_filename=renamed_filename,
+                    processing_status="Completed",
+                    archived_path=archived_path
+                )
+            )
+        
+        # Success
+        return ProcessSftpFileResponse(
+            success=True,
+            message="File processed successfully",
+            data=ProcessSftpFileData(
+                file_id=file_id,
+                file_blob_id=file_blob_id,
+                original_filename=request.file_name,
+                renamed_filename=renamed_filename,
+                processing_status="Completed",
+                archived_path=archived_path
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process SFTP file: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process file: {str(e)}"
+        )
+
+
+@app.get("/files/archived", response_model=ArchivedFileListResponse)
+async def list_archived_files(
+    limit: int = 100,
+    offset: int = 0,
+    sftp_service: SFTPService = Depends(get_sftp_service)
+):
+    """List all files in the Archived folder on the SFTP server."""
+    try:
+        archived_folder = config.sftp.archived_folder
+        
+        with sftp_service:
+            # Ensure archived folder exists
+            sftp_service.ensure_directory_exists(archived_folder)
+            
+            # List files in archived folder
+            files_data = sftp_service.list_files(archived_folder)
+            
+            # Filter out directories and sort by modified date (descending)
+            file_list = [
+                f for f in files_data 
+                if not f['is_directory']
+            ]
+            file_list.sort(key=lambda x: x['modified'], reverse=True)
+            
+            # Apply pagination
+            total = len(file_list)
+            paginated_files = file_list[offset:offset + limit]
+            
+            # Convert to response format
+            archived_files = [
+                ArchivedFileInfo(
+                    name=f['name'],
+                    size=f['size'],
+                    created_date=None,  # SFTP doesn't always provide creation date
+                    modified_date=datetime.fromtimestamp(f['modified'])
+                )
+                for f in paginated_files
+            ]
+            
+            return ArchivedFileListResponse(
+                files=archived_files,
+                total=total,
+                limit=limit,
+                offset=offset
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to list archived files: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list archived files: {str(e)}"
+        )
+
+
+@app.get("/files/archived/{file_name}", response_model=ArchivedFileContentResponse)
+async def get_archived_file(
+    file_name: str,
+    sftp_service: SFTPService = Depends(get_sftp_service)
+):
+    """Retrieve content of an archived file."""
+    try:
+        archived_folder = config.sftp.archived_folder
+        file_path = f"{archived_folder}/{file_name}" if archived_folder != "." else file_name
+        
+        with sftp_service:
+            # Ensure archived folder exists
+            sftp_service.ensure_directory_exists(archived_folder)
+            
+            # Check if file exists
+            if not sftp_service.file_exists(file_path):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Archived file not found: {file_name}"
+                )
+            
+            # Read file content
+            content_bytes = sftp_service.read_file(file_path)
+            
+            # Try to decode as text
+            try:
+                content = content_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                # If UTF-8 fails, try other encodings
+                for enc in ["latin-1", "cp1252", "iso-8859-1"]:
+                    try:
+                        content = content_bytes.decode(enc)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                else:
+                    # If all text encodings fail, return as base64
+                    import base64
+                    content = base64.b64encode(content_bytes).decode('ascii')
+            
+            return ArchivedFileContentResponse(
+                file_name=file_name,
+                content=content,
+                size=len(content_bytes)
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get archived file: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get archived file: {str(e)}"
+        )
+
+
 @app.get("/files/{file_path:path}", response_model=FileContent)
 async def read_file(
     file_path: str,
@@ -369,7 +692,14 @@ async def get_ach_files(
     offset: int = 0,
     oracle_service: OracleService = Depends(get_oracle_service)
 ):
-    """Get list of ACH_FILES records."""
+    """Get list of ACH_FILES records.
+    
+    Excludes files starting with 'FEDACHOUT' or ending with '.pdf'.
+    
+    Args:
+        limit: Maximum number of records to return (default: 100)
+        offset: Number of records to skip (default: 0)
+    """
     try:
         with oracle_service:
             files = oracle_service.get_ach_files(limit=limit, offset=offset)
@@ -810,6 +1140,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "obs_sftp_file_processor.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=8002,
         reload=config.debug
     )
