@@ -1,0 +1,20 @@
+Create Users in Oracle API_USERS table
+
+USERNAME: douglasearp
+PASSWORD to HASH for PASSWORD_HASH: @Buttermilk1985!!
+EMAIL: dearp@openbankingsolutions.com
+FULL_NAME: Doug Earp
+IS_ADMIN: 1
+
+Create corresponding record in API_USER_TABLES
+ROLE_NAME: ADMIN 
+
+
+USERNAME: testuser
+PASSWORD to HASH for PASSWORD_HASH: @SuperTester1985!!
+EMAIL: testuser@openbankingsolutions.com
+FULL_NAME: TestFname TestLname
+IS_ADMIN: 0
+
+Create corresponding record in API_USER_TABLES
+ROLE_NAME: USER  

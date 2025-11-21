@@ -128,3 +128,17 @@ class ArchivedFileContentResponse(BaseModel):
     file_name: str = Field(..., description="File name")
     content: str = Field(..., description="File content as string")
     size: int = Field(..., description="File size in bytes")
+
+
+class OracleAuthRequest(BaseModel):
+    """Request model for Oracle authentication check."""
+    
+    email: str = Field(..., description="User email address")
+    password_hash: str = Field(..., description="Password hash to verify")
+
+
+class OracleAuthResponse(BaseModel):
+    """Response model for Oracle authentication check."""
+    
+    authenticated: bool = Field(..., description="True if email and password hash match, False otherwise")
+    is_admin: bool = Field(False, description="True if user is admin, False otherwise (only set when authenticated=True)")

@@ -13,7 +13,8 @@ from .models import (
     FileContent, FileListResponse, HealthResponse, ErrorResponse, FileInfo, 
     AddSftpAchFileRequest, AddSftpAchFileResponse,
     ProcessSftpFileRequest, ProcessSftpFileResponse, ProcessSftpFileData, ProcessSftpFileErrorDetails,
-    ArchivedFileListResponse, ArchivedFileContentResponse, ArchivedFileInfo
+    ArchivedFileListResponse, ArchivedFileContentResponse, ArchivedFileInfo,
+    OracleAuthRequest, OracleAuthResponse
 )
 from .sftp_service import SFTPService
 from .oracle_service import OracleService
@@ -23,6 +24,7 @@ from .ach_file_blobs_service import AchFileBlobsService
 from .ach_file_blobs_models import AchFileBlobCreate, AchFileBlobResponse
 from .ach_validator import parse_ach_file_content
 from .file_utils import add_client_id_to_filename
+from .rate_limiter import oracle_auth_rate_limiter
 
 
 # Configure logging
@@ -60,7 +62,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    """Create archived folder on application startup if it doesn't exist."""
+    """Initialize services and verify connections on application startup."""
+    # Test SFTP connection and create archived folder
     try:
         sftp_service = SFTPService(config.sftp)
         with sftp_service:
@@ -70,6 +73,25 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Could not create archived folder on startup: {e}")
         # Don't fail startup if folder creation fails - it will be created when needed
+    
+    # Test Oracle connection
+    try:
+        logger.info("Testing Oracle database connection on startup...")
+        oracle_service = OracleService(config.oracle)
+        with oracle_service:
+            # Test connection by getting a simple query
+            with oracle_service.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1 FROM DUAL")
+                result = cursor.fetchone()
+                cursor.close()
+                logger.info(f"✅ Oracle connection test successful (result: {result[0]})")
+                logger.info(f"   Oracle Home: {config.oracle.host}:{config.oracle.port}/{config.oracle.service_name}")
+                logger.info(f"   Schema: {config.oracle.db_schema}")
+    except Exception as e:
+        logger.error(f"❌ Oracle connection test failed on startup: {e}")
+        logger.warning("Application will continue, but Oracle operations may fail")
+        # Don't fail startup - allow app to start even if Oracle is temporarily unavailable
 
 
 def get_sftp_service() -> SFTPService:
@@ -985,6 +1007,53 @@ async def get_active_clients(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get active clients: {str(e)}"
+        )
+
+
+@app.post("/oracle-auth", response_model=OracleAuthResponse)
+async def oracle_auth(
+    request: OracleAuthRequest,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """
+    Check if email and password hash match in API_USERS table.
+    
+    Returns authenticated (true/false) and is_admin flag.
+    Rate limited to 15 requests per minute per email.
+    """
+    try:
+        # Check rate limit
+        is_allowed, remaining = oracle_auth_rate_limiter.is_allowed(request.email)
+        
+        if not is_allowed:
+            logger.warning(f"Rate limit exceeded for email: {request.email}")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Maximum 15 requests per minute per email. Please try again later."
+            )
+        
+        # Check email and password hash in database
+        with oracle_service:
+            auth_result = oracle_service.check_email_password_hash(
+                email=request.email,
+                password_hash=request.password_hash
+            )
+        
+        logger.info(f"Oracle auth check for {request.email}: {'Authenticated' if auth_result['authenticated'] else 'Not authenticated'} (IS_ADMIN: {auth_result['is_admin']}, remaining requests: {remaining})")
+        
+        return OracleAuthResponse(
+            authenticated=auth_result['authenticated'],
+            is_admin=auth_result['is_admin']
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like rate limit)
+        raise
+    except Exception as e:
+        logger.error(f"Failed to check email and password hash: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check authentication: {str(e)}"
         )
 
 

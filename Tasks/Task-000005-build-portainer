@@ -1,0 +1,30 @@
+
+Here is the working files of Portainer for the app that works
+I need the Oracle Instant Client to be added to the image so that it can be used in the container.
+Here is the plan to add the Oracle Instant Client to the image:
+    Please create a docker compose file that will build the image with the Oracle Instant Client added to the image.
+My goal is to create a build that can be used in Portainer with Oracle thick Client
+
+
+Image	docker.io/library/obs-sftp-file-processor:portainer-v2@sha256:065200fe34abe62b6b2bcbaf9271f80693fb23036e2c513e81cb150c5af8d035
+Port configuration	
+0.0.0.0:8001  8000/tcp
+CMD	uvicorn src.obs_sftp_file_processor.main:app --host 0.0.0.0 --port 8000
+ENTRYPOINT	
+ENV	
+container	podman
+GPG_KEY	A035C8C19219BA821ECEA86B64E628F8D684696D
+HOME	/root
+HOSTNAME	286bfac67e98
+LANG	C.UTF-8
+LD_LIBRARY_PATH	/opt/oracle/instantclient_23_3
+ORACLE_HOME	/opt/oracle/instantclient_23_3
+PATH	/app/.venv/bin:/opt/oracle/instantclient_23_3:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PYTHON_SHA256	8d3ed8ec5c88c1c95f5e558612a725450d2452813ddad5e58fdb1a53b1209b78
+PYTHON_VERSION	3.11.14
+PYTHONPATH	/app
+PYTHONUNBUFFERED	1
+Labels	
+com.docker.compose.project	obs-sftp-file-processor-python
+com.docker.compose.service	obs-sftp-file-processor
+com.docker.compose.version	2.39.4

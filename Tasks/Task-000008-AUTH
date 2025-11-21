@@ -1,0 +1,4 @@
+Please update the response on oracle-auth to return 
+authenticated: true or false
+and 
+IS_ADMIN: FROM API_USERS

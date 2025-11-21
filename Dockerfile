@@ -11,6 +11,17 @@ RUN apt-get update && apt-get install -y \
     && ln -sf /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1 \
     || true
 
+# Install Oracle Instant Client
+# Copy Oracle Instant Client from build context (already extracted)
+COPY oracle/instantclient_23_3 /opt/oracle/instantclient_23_3
+
+# Set permissions for Oracle Instant Client
+RUN chmod -R 755 /opt/oracle/instantclient_23_3 && \
+    echo "Oracle Instant Client installed successfully"
+
+# Verify Oracle Instant Client installation
+RUN ls -la /opt/oracle/instantclient_23_3/libclntsh.so* || echo "Warning: Oracle library not found"
+
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -29,16 +40,19 @@ COPY . .
 # Create logs directory
 RUN mkdir -p logs
 
-# Note: Using Oracle thin mode - no Oracle Instant Client required
-# Thin mode is a pure Python implementation that doesn't need native libraries
+# Oracle Instant Client is installed in the image at /opt/oracle/instantclient_23_3
+# Thick mode will be used when ORACLE_HOME is set
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENV LANG=C.UTF-8
+ENV HOME=/root
+ENV ORACLE_HOME=/opt/oracle/instantclient_23_3
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_23_3
 
 # Activate virtual environment and Oracle in PATH
 ENV PATH="/app/.venv/bin:/opt/oracle/instantclient_23_3:${PATH}"
-ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_23_3
 
 # Expose FastAPI port
 EXPOSE 8000

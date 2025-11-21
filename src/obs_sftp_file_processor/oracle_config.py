@@ -13,7 +13,7 @@ class OracleConfig(BaseSettings):
     service_name: str = Field("PDB_ACHDEV01.privatesubnet1.obsnetwork1.oraclevcn.com", description="Oracle service name")
     username: str = Field("achowner", description="Oracle username")
     password: str = Field("TLcbbhQuiV7##sLv4tMr", description="Oracle password")
-    schema: str = Field("ACHOWNER", description="Oracle schema name")
+    db_schema: str = Field("ACHOWNER", description="Oracle schema name", validation_alias="schema")
     
     # Connection pool settings
     min_pool_size: int = Field(1, description="Minimum connection pool size")

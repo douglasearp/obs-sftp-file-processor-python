@@ -431,7 +431,7 @@ class OracleService:
                 SELECT 
                     CLIENT_ID,
                     CLIENT_NAME
-                FROM {self.config.schema}.ACH_CLIENTS
+                FROM {self.config.db_schema}.ACH_CLIENTS
                 WHERE CLIENT_STATUS = 'Active'
                 ORDER BY CLIENT_NAME
                 """
@@ -451,4 +451,56 @@ class OracleService:
                 
         except Exception as e:
             logger.error(f"Failed to get active clients: {e}")
+            raise
+    
+    def check_email_password_hash(self, email: str, password_hash: str) -> Dict[str, Any]:
+        """
+        Check if email and password hash match in API_USERS table.
+        
+        Args:
+            email: User email address
+            password_hash: Password hash to verify
+            
+        Returns:
+            Dictionary with:
+            - authenticated: bool - True if match found
+            - is_admin: bool - True if user is admin (only when authenticated=True)
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Query API_USERS table for matching email and password_hash
+                # Also check that user is active, and get IS_ADMIN
+                select_sql = """
+                SELECT IS_ADMIN
+                FROM API_USERS
+                WHERE UPPER(EMAIL) = UPPER(:email)
+                  AND PASSWORD_HASH = :password_hash
+                  AND IS_ACTIVE = 1
+                """
+                
+                cursor.execute(select_sql, {
+                    'email': email,
+                    'password_hash': password_hash
+                })
+                
+                result = cursor.fetchone()
+                
+                if result:
+                    is_admin = bool(result[0]) if result[0] is not None else False
+                    logger.info(f"Email and password hash match found for: {email} (IS_ADMIN: {is_admin})")
+                    return {
+                        'authenticated': True,
+                        'is_admin': is_admin
+                    }
+                else:
+                    logger.info(f"No match found for email: {email}")
+                    return {
+                        'authenticated': False,
+                        'is_admin': False
+                    }
+                
+        except Exception as e:
+            logger.error(f"Failed to check email and password hash: {e}")
             raise

@@ -57,9 +57,9 @@ Tasks/
 test_*.py
 tests/
 
-# Oracle Instant Client (if downloaded separately)
-oracle/
-instantclient_*.zip
+# Oracle Instant Client - explicitly allow it for Docker build
+# Note: oracle/ might be in .gitignore, but we need it for Docker
+!oracle/instantclient_23_3
 
 # macOS
 .DS_Store

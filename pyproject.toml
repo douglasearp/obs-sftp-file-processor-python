@@ -23,6 +23,8 @@ dependencies = [
     "requests>=2.32.4",
     "oracledb>=3.0.0",
     "sqlalchemy>=2.0.44",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt>=5.0.0",
 ]
 
 [project.optional-dependencies]

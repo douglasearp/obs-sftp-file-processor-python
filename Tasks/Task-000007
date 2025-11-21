@@ -1,0 +1,5 @@
+Create a API called oracle-auth that will accept a email and PASSWORD_HASH that will return 1 for yes and a 0 for no 
+that checks the database for a match on email and PASSWORD_HASH match 
+
+put rate limiting that you can only submit the same email 15 times in a 1 minute window
+
