@@ -237,12 +237,80 @@ class OracleService:
             raise
     
     def update_ach_file(self, file_id: int, ach_file: AchFileUpdate) -> bool:
-        """Update an ACH_FILES record."""
+        """Update an ACH_FILES record.
+        
+        For large CLOB updates (>1MB), uses DBMS_LOB to reduce PGA memory usage.
+        This prevents ORA-04036 errors when updating large file contents.
+        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Build dynamic update statement
+                # Check if we need to update FILE_CONTENTS (large CLOB)
+                file_contents_size = len(ach_file.file_contents.encode('utf-8')) if ach_file.file_contents else 0
+                use_lob_update = file_contents_size > 1048576  # 1MB threshold
+                
+                # If updating large CLOB, use DBMS_LOB approach
+                if ach_file.file_contents is not None and use_lob_update:
+                    # First, update non-CLOB fields
+                    update_fields = []
+                    params = {'file_id': file_id}
+                    
+                    if ach_file.processing_status is not None:
+                        update_fields.append("PROCESSING_STATUS = :processing_status")
+                        params['processing_status'] = ach_file.processing_status
+                    
+                    if ach_file.updated_by_user is not None:
+                        update_fields.append("UPDATED_BY_USER = :updated_by_user")
+                        params['updated_by_user'] = ach_file.updated_by_user
+                    
+                    if update_fields:
+                        update_fields.append("UPDATED_DATE = CURRENT_TIMESTAMP")
+                        update_sql = f"""
+                        UPDATE ACH_FILES 
+                        SET {', '.join(update_fields)}
+                        WHERE FILE_ID = :file_id
+                        """
+                        cursor.execute(update_sql, params)
+                    
+                    # Now update CLOB using DBMS_LOB (chunked, memory-efficient)
+                    # Get the CLOB locator and write in chunks to avoid PGA memory issues
+                    get_lob_sql = """
+                    SELECT FILE_CONTENTS 
+                    FROM ACH_FILES
+                    WHERE FILE_ID = :file_id
+                    FOR UPDATE
+                    """
+                    cursor.execute(get_lob_sql, {'file_id': file_id})
+                    row = cursor.fetchone()
+                    if not row:
+                        return False
+                    
+                    clob = row[0]
+                    
+                    # Truncate existing content
+                    cursor.execute("BEGIN DBMS_LOB.TRUNCATE(:clob, 0); END;", {'clob': clob})
+                    
+                    # Write in 32KB chunks to avoid PGA memory issues
+                    chunk_size = 32767  # Oracle VARCHAR2 max size
+                    file_contents = ach_file.file_contents
+                    offset = 0
+                    total_length = len(file_contents)
+                    
+                    while offset < total_length:
+                        chunk = file_contents[offset:offset + chunk_size]
+                        chunk_length = len(chunk)
+                        cursor.execute(
+                            "BEGIN DBMS_LOB.WRITEAPPEND(:clob, :amount, :buffer); END;",
+                            {'clob': clob, 'amount': chunk_length, 'buffer': chunk}
+                        )
+                        offset += chunk_length
+                    
+                    conn.commit()
+                    logger.info(f"Updated ACH_FILES record {file_id} with large CLOB ({file_contents_size} bytes) using DBMS_LOB")
+                    return True
+                
+                # For small CLOBs or no CLOB update, use standard UPDATE
                 update_fields = []
                 params = {'file_id': file_id}
                 
@@ -287,12 +355,82 @@ class OracleService:
         updated_by_user: str = "system-user",
         updated_date: Optional[datetime] = None
     ) -> bool:
-        """Update ACH_FILES record by file_id with file_contents, updated_by_user, and updated_date."""
+        """Update ACH_FILES record by file_id with file_contents, updated_by_user, and updated_date.
+        
+        For large CLOB updates (>1MB), uses DBMS_LOB to reduce PGA memory usage.
+        This prevents ORA-04036 errors when updating large file contents.
+        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Build update statement
+                # Check file size to determine update method
+                file_contents_size = len(file_contents.encode('utf-8'))
+                use_lob_update = file_contents_size > 1048576  # 1MB threshold
+                
+                if use_lob_update:
+                    # Update non-CLOB fields first
+                    if updated_date is not None:
+                        update_sql = """
+                        UPDATE ACH_FILES 
+                        SET UPDATED_BY_USER = :updated_by_user,
+                            UPDATED_DATE = :updated_date
+                        WHERE FILE_ID = :file_id
+                        """
+                        cursor.execute(update_sql, {
+                            'file_id': file_id,
+                            'updated_by_user': updated_by_user,
+                            'updated_date': updated_date
+                        })
+                    else:
+                        update_sql = """
+                        UPDATE ACH_FILES 
+                        SET UPDATED_BY_USER = :updated_by_user,
+                            UPDATED_DATE = CURRENT_TIMESTAMP
+                        WHERE FILE_ID = :file_id
+                        """
+                        cursor.execute(update_sql, {
+                            'file_id': file_id,
+                            'updated_by_user': updated_by_user
+                        })
+                    
+                    # Update CLOB using DBMS_LOB (chunked, memory-efficient)
+                    # Get the CLOB locator and write in chunks to avoid PGA memory issues
+                    get_lob_sql = """
+                    SELECT FILE_CONTENTS 
+                    FROM ACH_FILES
+                    WHERE FILE_ID = :file_id
+                    FOR UPDATE
+                    """
+                    cursor.execute(get_lob_sql, {'file_id': file_id})
+                    row = cursor.fetchone()
+                    if not row:
+                        return False
+                    
+                    clob = row[0]
+                    
+                    # Truncate existing content
+                    cursor.execute("BEGIN DBMS_LOB.TRUNCATE(:clob, 0); END;", {'clob': clob})
+                    
+                    # Write in 32KB chunks to avoid PGA memory issues
+                    chunk_size = 32767  # Oracle VARCHAR2 max size
+                    offset = 0
+                    total_length = len(file_contents)
+                    
+                    while offset < total_length:
+                        chunk = file_contents[offset:offset + chunk_size]
+                        chunk_length = len(chunk)
+                        cursor.execute(
+                            "BEGIN DBMS_LOB.WRITEAPPEND(:clob, :amount, :buffer); END;",
+                            {'clob': clob, 'amount': chunk_length, 'buffer': chunk}
+                        )
+                        offset += chunk_length
+                    
+                    conn.commit()
+                    logger.info(f"Updated ACH_FILES record {file_id} with large CLOB ({file_contents_size} bytes) using DBMS_LOB")
+                    return True
+                
+                # For small CLOBs, use standard UPDATE
                 if updated_date is not None:
                     update_sql = """
                     UPDATE ACH_FILES 

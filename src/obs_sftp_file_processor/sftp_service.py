@@ -20,6 +20,9 @@ class SFTPService:
     
     def connect(self) -> None:
         """Establish SFTP connection."""
+        # Clean up any existing connection first
+        self.disconnect()
+        
         try:
             self.client = paramiko.SSHClient()
             self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -29,7 +32,9 @@ class SFTPService:
                 'hostname': self.config.host,
                 'port': self.config.port,
                 'username': self.config.username,
-                'timeout': self.config.timeout
+                'timeout': self.config.timeout,
+                'allow_agent': False,  # Disable SSH agent
+                'look_for_keys': False  # Don't look for keys in default locations
             }
             
             if self.config.key_path and os.path.exists(self.config.key_path):
@@ -45,6 +50,12 @@ class SFTPService:
             
             self.client.connect(**auth_kwargs)
             self.sftp = self.client.open_sftp()
+            
+            # Set keepalive to prevent connection timeout
+            transport = self.client.get_transport()
+            if transport:
+                transport.set_keepalive(30)  # Send keepalive every 30 seconds
+            
             logger.info("SFTP connection established successfully")
             
         except Exception as e:
@@ -54,13 +65,27 @@ class SFTPService:
     
     def disconnect(self) -> None:
         """Close SFTP connection."""
-        if self.sftp:
-            self.sftp.close()
-            self.sftp = None
-        if self.client:
-            self.client.close()
-            self.client = None
-        logger.info("SFTP connection closed")
+        try:
+            if self.sftp:
+                try:
+                    self.sftp.close()
+                except:
+                    pass
+                self.sftp = None
+        except:
+            pass
+        
+        try:
+            if self.client:
+                try:
+                    self.client.close()
+                except:
+                    pass
+                self.client = None
+        except:
+            pass
+        
+        logger.debug("SFTP connection closed")
     
     def __enter__(self):
         """Context manager entry."""
@@ -71,8 +96,46 @@ class SFTPService:
         """Context manager exit."""
         self.disconnect()
     
+    def _ensure_connected(self) -> None:
+        """Ensure SFTP connection is active, reconnect if needed."""
+        try:
+            # Check if connection is still alive
+            if self.sftp and self.client:
+                # Check if transport is active
+                transport = self.client.get_transport()
+                if transport and transport.is_active():
+                    # Connection appears active, but verify with a simple operation
+                    try:
+                        # Try to get current directory (lightweight operation)
+                        self.sftp.getcwd()
+                    except (paramiko.SSHException, EOFError, OSError, AttributeError):
+                        # Connection is dead, reconnect
+                        logger.warning("SFTP connection lost, reconnecting...")
+                        self.disconnect()
+                        self.connect()
+                else:
+                    # Transport not active, reconnect
+                    logger.warning("SFTP transport not active, reconnecting...")
+                    self.disconnect()
+                    self.connect()
+            elif not self.sftp or not self.client:
+                # Not connected, establish connection
+                logger.info("SFTP not connected, establishing connection...")
+                self.connect()
+        except Exception as e:
+            logger.error(f"Failed to ensure SFTP connection: {e}")
+            # Try to reconnect
+            try:
+                self.disconnect()
+            except:
+                pass
+            self.connect()
+    
     def list_files(self, remote_path: str = ".") -> List[Dict[str, Any]]:
         """List files in remote directory."""
+        # Ensure connection is active before use
+        self._ensure_connected()
+        
         if not self.sftp:
             raise RuntimeError("SFTP connection not established")
         
@@ -91,6 +154,28 @@ class SFTPService:
             logger.info(f"Listed {len(files)} items from {remote_path}")
             return files
             
+        except (paramiko.SSHException, EOFError, OSError) as e:
+            # Connection error, try to reconnect and retry once
+            logger.warning(f"SFTP connection error during list_files: {e}, attempting reconnect...")
+            try:
+                self.disconnect()
+                self.connect()
+                # Retry the operation
+                files = []
+                for item in self.sftp.listdir_attr(remote_path):
+                    file_info = {
+                        'name': item.filename,
+                        'size': item.st_size,
+                        'modified': item.st_mtime,
+                        'is_directory': stat.S_ISDIR(item.st_mode),
+                        'permissions': stat.filemode(item.st_mode)
+                    }
+                    files.append(file_info)
+                logger.info(f"Listed {len(files)} items from {remote_path} after reconnect")
+                return files
+            except Exception as retry_error:
+                logger.error(f"Failed to list files in {remote_path} after reconnect: {retry_error}")
+                raise
         except Exception as e:
             logger.error(f"Failed to list files in {remote_path}: {e}")
             raise
