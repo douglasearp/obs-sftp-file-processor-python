@@ -26,7 +26,7 @@ echo "✓ Oracle Instant Client found"
 # Build the Docker image
 echo ""
 echo "Building Docker image..."
-docker build --platform linux/amd64 -t obs-sftp-file-processor:portainer-v2 .
+docker build --platform linux/amd64 -t obs-sftp-file-processor:portainer-v3 .
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Docker build failed"
@@ -38,7 +38,7 @@ echo "✓ Docker image built successfully"
 # Verify Oracle is in the image
 echo ""
 echo "Verifying Oracle Instant Client in image..."
-docker run --rm obs-sftp-file-processor:portainer-v2 ls -la /opt/oracle/instantclient_23_3/libclntsh.so* > /dev/null 2>&1
+docker run --rm obs-sftp-file-processor:portainer-v3 ls -la /opt/oracle/instantclient_23_3/libclntsh.so* > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
     echo "✓ Oracle Instant Client verified in image"
@@ -49,8 +49,8 @@ fi
 # Export the image
 echo ""
 echo "Exporting Docker image to tar file..."
-OUTPUT_FILE="obs-sftp-file-processor-portainer-v2.tar"
-docker save obs-sftp-file-processor:portainer-v2 -o "$OUTPUT_FILE"
+OUTPUT_FILE="obs-sftp-file-processor-portainer-v3.tar"
+docker save obs-sftp-file-processor:portainer-v3 -o "$OUTPUT_FILE"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to export image"
@@ -66,7 +66,7 @@ echo "=========================================="
 echo "Build Complete!"
 echo "=========================================="
 echo ""
-echo "Image: obs-sftp-file-processor:portainer-v2"
+echo "Image: obs-sftp-file-processor:portainer-v3"
 echo "File:  $OUTPUT_FILE"
 echo ""
 echo "Next steps:"
