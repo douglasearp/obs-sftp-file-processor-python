@@ -94,12 +94,84 @@ class AchFileBlobsService:
         return self.pool.acquire()
     
     def create_ach_file_blob(self, ach_file_blob: AchFileBlobCreate) -> int:
-        """Create a new ACH_FILES_BLOBS record."""
+        """Create a new ACH_FILES_BLOBS record.
+        
+        For large CLOB inserts (>1MB), uses DBMS_LOB to reduce PGA memory usage.
+        This prevents ORA-04036 errors when inserting large file contents.
+        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Insert statement with RETURNING clause to get the generated FILE_BLOB_ID
+                # Check file size to determine insert method
+                file_contents_size = len(ach_file_blob.file_contents.encode('utf-8')) if ach_file_blob.file_contents else 0
+                use_lob_insert = file_contents_size > 1048576  # 1MB threshold
+                
+                if use_lob_insert:
+                    # For large CLOBs, insert with empty CLOB first, then write using DBMS_LOB
+                    # Use PL/SQL block to get CLOB locator
+                    insert_plsql = """
+                    DECLARE
+                        v_file_blob_id NUMBER;
+                        v_clob CLOB;
+                    BEGIN
+                        INSERT INTO ACH_FILES_BLOBS (
+                            FILE_ID,
+                            ORIGINAL_FILENAME,
+                            PROCESSING_STATUS,
+                            FILE_CONTENTS,
+                            CREATED_BY_USER,
+                            CREATED_DATE
+                        ) VALUES (
+                            :file_id,
+                            :original_filename,
+                            :processing_status,
+                            EMPTY_CLOB(),
+                            :created_by_user,
+                            CURRENT_TIMESTAMP
+                        ) RETURNING FILE_BLOB_ID, FILE_CONTENTS INTO v_file_blob_id, v_clob;
+                        
+                        :file_blob_id := v_file_blob_id;
+                        :file_contents_clob := v_clob;
+                    END;
+                    """
+                    
+                    # Execute insert with empty CLOB
+                    file_blob_id = cursor.var(int)
+                    file_contents_clob = cursor.var(oracledb.DB_TYPE_CLOB)
+                    cursor.execute(insert_plsql, {
+                        'file_id': ach_file_blob.file_id,
+                        'original_filename': ach_file_blob.original_filename,
+                        'processing_status': ach_file_blob.processing_status,
+                        'created_by_user': ach_file_blob.created_by_user,
+                        'file_blob_id': file_blob_id,
+                        'file_contents_clob': file_contents_clob
+                    })
+                    
+                    # Get the CLOB locator
+                    clob = file_contents_clob.getvalue()[0]
+                    generated_id = file_blob_id.getvalue()[0]
+                    
+                    # Write content in 32KB chunks to avoid PGA memory issues
+                    chunk_size = 32767  # Oracle VARCHAR2 max size
+                    file_contents = ach_file_blob.file_contents
+                    offset = 0
+                    total_length = len(file_contents)
+                    
+                    while offset < total_length:
+                        chunk = file_contents[offset:offset + chunk_size]
+                        chunk_length = len(chunk)
+                        cursor.execute(
+                            "BEGIN DBMS_LOB.WRITEAPPEND(:clob, :amount, :buffer); END;",
+                            {'clob': clob, 'amount': chunk_length, 'buffer': chunk}
+                        )
+                        offset += chunk_length
+                    
+                    conn.commit()
+                    logger.info(f"Created ACH_FILES_BLOBS record {generated_id} with large CLOB ({file_contents_size} bytes) using DBMS_LOB")
+                    return generated_id
+                
+                # For small CLOBs, use standard INSERT
                 insert_sql = """
                 INSERT INTO ACH_FILES_BLOBS (
                     FILE_ID,
