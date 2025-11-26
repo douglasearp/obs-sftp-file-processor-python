@@ -2,7 +2,7 @@
 
 import mimetypes
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -890,11 +890,30 @@ async def create_ach_file(
 async def update_ach_file(
     file_id: int,
     ach_file: AchFileUpdate,
+    user: Optional[str] = None,
+    processing_status: Optional[str] = None,
     oracle_service: OracleService = Depends(get_oracle_service)
 ):
-    """Update an ACH_FILES record."""
+    """Update an ACH_FILES record.
+    
+    Args:
+        file_id: The ID of the ACH_FILES record to update
+        ach_file: The update data (processing_status, file_contents, etc.)
+        user: Optional user parameter to set UPDATED_BY_USER column. 
+              If provided, takes precedence over updated_by_user in request body.
+        processing_status: Optional parameter to set PROCESSING_STATUS column to "Approved".
+                           If provided, takes precedence over processing_status in request body.
+    """
     try:
         with oracle_service:
+            # If user query parameter is provided, override updated_by_user in body
+            if user is not None:
+                ach_file.updated_by_user = user
+            
+            # If processing_status query parameter is provided, set processing_status to "Approved"
+            if processing_status is not None:
+                ach_file.processing_status = "Approved"
+            
             success = oracle_service.update_ach_file(file_id, ach_file)
             
             if not success:
