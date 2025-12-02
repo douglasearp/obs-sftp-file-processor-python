@@ -107,8 +107,15 @@ class OracleService:
                 cursor = conn.cursor()
                 
                 # Check file size to determine if we need DBMS_LOB approach
-                file_contents_size = len(ach_file.file_contents) if ach_file.file_contents else 0
-                use_lob_insert = file_contents_size > 1024 * 1024  # > 1MB
+                # Use more conservative threshold (500KB) and check both string length and encoded size
+                if ach_file.file_contents:
+                    char_length = len(ach_file.file_contents)
+                    byte_size = len(ach_file.file_contents.encode('utf-8'))
+                    file_contents_size = max(char_length, byte_size)
+                else:
+                    file_contents_size = 0
+                # Lower threshold to 500KB to be more conservative and prevent edge cases
+                use_lob_insert = file_contents_size > 512 * 1024  # 500KB threshold
                 
                 if use_lob_insert and ach_file.file_contents:
                     # For large CLOBs, insert with empty CLOB first, then write using DBMS_LOB
@@ -232,10 +239,31 @@ class OracleService:
                 
                 if row:
                     # Handle CLOB data - convert LOB to string
+                    # For large CLOBs, read in chunks to avoid memory issues
                     file_contents = row[3]
-                    if hasattr(file_contents, 'read'):
-                        # It's a LOB object, read the content
-                        file_contents = file_contents.read()
+                    if file_contents:
+                        if hasattr(file_contents, 'read'):
+                            # It's a LOB object, check size first
+                            try:
+                                lob_size = file_contents.size()
+                                # For very large CLOBs (>10MB), truncate or skip content to avoid memory issues
+                                if lob_size > 10 * 1024 * 1024:  # 10MB
+                                    # For very large files, return a placeholder message
+                                    file_contents = f"[File content too large to display ({lob_size} bytes)]"
+                                else:
+                                    # Read the CLOB content
+                                    file_contents = file_contents.read()
+                            except Exception as e:
+                                logger.warning(f"Error reading CLOB for FILE_ID {file_id}: {e}")
+                                file_contents = "[Error reading file content]"
+                        elif isinstance(file_contents, str):
+                            # Already a string, use as-is
+                            pass
+                        else:
+                            # Unknown type, convert to string
+                            file_contents = str(file_contents) if file_contents else None
+                    else:
+                        file_contents = None
                     
                     return AchFileResponse(
                         file_id=row[0],
@@ -264,7 +292,6 @@ class OracleService:
                     FILE_ID,
                     ORIGINAL_FILENAME,
                     PROCESSING_STATUS,
-                    FILE_CONTENTS,
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
@@ -280,21 +307,17 @@ class OracleService:
                 
                 files = []
                 for row in rows:
-                    # Handle CLOB data - convert LOB to string
-                    file_contents = row[3]
-                    if file_contents and hasattr(file_contents, 'read'):
-                        # It's a LOB object, read the content
-                        file_contents = file_contents.read()
-                    
+                    # FILE_CONTENTS is excluded from list query to avoid CLOB reading issues
+                    # Use get_ach_file(file_id) to retrieve individual file contents
                     files.append(AchFileResponse(
                         file_id=row[0],
                         original_filename=row[1],
                         processing_status=row[2],
-                        file_contents=file_contents,
-                        created_by_user=row[4],
-                        created_date=row[5],
-                        updated_by_user=row[6],
-                        updated_date=row[7]
+                        file_contents=None,  # Excluded from list query
+                        created_by_user=row[3],
+                        created_date=row[4],
+                        updated_by_user=row[5],
+                        updated_date=row[6]
                     ))
                 
                 logger.info(f"Retrieved {len(files)} ACH_FILES records")
@@ -315,8 +338,16 @@ class OracleService:
                 cursor = conn.cursor()
                 
                 # Check if we need to update FILE_CONTENTS (large CLOB)
-                file_contents_size = len(ach_file.file_contents.encode('utf-8')) if ach_file.file_contents else 0
-                use_lob_update = file_contents_size > 1048576  # 1MB threshold
+                # Use more conservative threshold (500KB) and check both string length and encoded size
+                if ach_file.file_contents:
+                    # Check both character length and byte size to be safe
+                    char_length = len(ach_file.file_contents)
+                    byte_size = len(ach_file.file_contents.encode('utf-8'))
+                    file_contents_size = max(char_length, byte_size)
+                else:
+                    file_contents_size = 0
+                # Lower threshold to 500KB to be more conservative and prevent edge cases
+                use_lob_update = file_contents_size > 512 * 1024  # 500KB threshold
                 
                 # If updating large CLOB, use DBMS_LOB approach
                 if ach_file.file_contents is not None and use_lob_update:
@@ -433,8 +464,12 @@ class OracleService:
                 cursor = conn.cursor()
                 
                 # Check file size to determine update method
-                file_contents_size = len(file_contents.encode('utf-8'))
-                use_lob_update = file_contents_size > 1048576  # 1MB threshold
+                # Use more conservative threshold (500KB) and check both string length and encoded size
+                char_length = len(file_contents)
+                byte_size = len(file_contents.encode('utf-8'))
+                file_contents_size = max(char_length, byte_size)
+                # Lower threshold to 500KB to be more conservative and prevent edge cases
+                use_lob_update = file_contents_size > 512 * 1024  # 500KB threshold
                 
                 if use_lob_update:
                     # Update non-CLOB fields first

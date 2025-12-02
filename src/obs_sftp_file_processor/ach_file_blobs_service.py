@@ -104,8 +104,15 @@ class AchFileBlobsService:
                 cursor = conn.cursor()
                 
                 # Check file size to determine insert method
-                file_contents_size = len(ach_file_blob.file_contents.encode('utf-8')) if ach_file_blob.file_contents else 0
-                use_lob_insert = file_contents_size > 1048576  # 1MB threshold
+                # Use more conservative threshold (500KB) and check both string length and encoded size
+                if ach_file_blob.file_contents:
+                    char_length = len(ach_file_blob.file_contents)
+                    byte_size = len(ach_file_blob.file_contents.encode('utf-8'))
+                    file_contents_size = max(char_length, byte_size)
+                else:
+                    file_contents_size = 0
+                # Lower threshold to 500KB to be more conservative and prevent edge cases
+                use_lob_insert = file_contents_size > 512 * 1024  # 500KB threshold
                 
                 if use_lob_insert:
                     # For large CLOBs, insert with empty CLOB first, then write using DBMS_LOB
