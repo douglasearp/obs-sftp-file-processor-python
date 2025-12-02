@@ -337,8 +337,9 @@ async def process_sftp_file(
     oracle_service: OracleService = Depends(get_oracle_service),
     ach_file_blobs_service: AchFileBlobsService = Depends(get_ach_file_blobs_service)
 ):
-    """Process a file from the SFTP server, rename it with client ID, create database records, and archive the file.
+    """Process a file from the SFTP server, create database records, and archive the file.
     
+    The filename is used as-is without any modifications.
     Supported file extensions: .txt, .DAT
     Example formats: ach_file_20241121.txt, AC20251105B_Generic.DAT
     """
@@ -382,9 +383,9 @@ async def process_sftp_file(
             file_content_bytes = sftp_service.read_file(source_path)
             file_content_str = file_content_bytes.decode('utf-8')
         
-        # Generate renamed filename with client_id prefix
-        renamed_filename = add_client_id_to_filename(request.file_name, request.client_id)
-        archived_path = f"{archived_folder}/{renamed_filename}" if archived_folder != "." else renamed_filename
+        # Use original filename without any prefix
+        original_filename = request.file_name
+        archived_path = f"{archived_folder}/{original_filename}" if archived_folder != "." else original_filename
         
         # Set created_by_user
         created_by_user = request.created_by_user or "system-user"
@@ -393,7 +394,7 @@ async def process_sftp_file(
         try:
             with oracle_service:
                 ach_file_create = AchFileCreate(
-                    original_filename=renamed_filename,
+                    original_filename=original_filename,
                     processing_status="Pending",
                     file_contents=file_content_str,
                     created_by_user=created_by_user
@@ -419,7 +420,7 @@ async def process_sftp_file(
             with ach_file_blobs_service:
                 ach_file_blob_create = AchFileBlobCreate(
                     file_id=file_id,
-                    original_filename=renamed_filename,
+                    original_filename=original_filename,
                     processing_status="Pending",
                     file_contents=file_content_str,
                     created_by_user=created_by_user
@@ -479,8 +480,8 @@ async def process_sftp_file(
                 data=ProcessSftpFileData(
                     file_id=file_id,
                     file_blob_id=file_blob_id,
-                    original_filename=request.file_name,
-                    renamed_filename=renamed_filename,
+                    original_filename=original_filename,
+                    renamed_filename=original_filename,
                     processing_status="Completed",
                     archived_path=archived_path
                 )
@@ -493,8 +494,8 @@ async def process_sftp_file(
             data=ProcessSftpFileData(
                 file_id=file_id,
                 file_blob_id=file_blob_id,
-                original_filename=request.file_name,
-                renamed_filename=renamed_filename,
+                original_filename=original_filename,
+                renamed_filename=original_filename,
                 processing_status="Completed",
                 archived_path=archived_path
             )
