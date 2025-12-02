@@ -18,3 +18,24 @@ IS_ADMIN: 0
 
 Create corresponding record in API_USER_TABLES
 ROLE_NAME: USER  
+
+USERNAME: lscarnici
+PASSWORD to HASH for PASSWORD_HASH: @SuperBanker8675309!!
+EMAIL: lscarnici@openbankingsolutions.com
+FULL_NAME: Larry Carnici
+IS_ADMIN: 1
+lscarnici@openbankingsolutions.com
+
+Create corresponding record in API_USER_TABLES
+ROLE_NAME: ADMIN 
+
+USERNAME: jlockwood
+PASSWORD to HASH for PASSWORD_HASH: @SuperBanker8675309!!
+EMAIL: lscarnici@openbankingsolutions.com
+FULL_NAME: Larry Carnici
+IS_ADMIN: 1
+lscarnici@openbankingsolutions.com
+
+Create corresponding record in API_USER_TABLES
+ROLE_NAME: ADMIN 
+
