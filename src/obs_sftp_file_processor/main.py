@@ -294,12 +294,24 @@ async def add_sftp_ach_file(
     request: AddSftpAchFileRequest,
     sftp_service: SFTPService = Depends(get_sftp_service)
 ):
-    """Upload ACH file to SFTP server with filename pattern CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.txt"""
+    """Upload ACH file to SFTP server with filename pattern CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.{extension}
+    
+    Supported extensions: .txt, .DAT
+    Example: AC20251105B_Generic.DAT format is supported via process-sftp-file endpoint
+    """
     try:
-        # Generate filename with pattern: CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.txt
+        # Validate file extension
+        file_ext = request.file_extension.strip().lstrip('.')  # Remove leading dot if present
+        if file_ext.lower() not in ['txt', 'dat']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file extension '{file_ext}'. Supported extensions: .txt, .DAT"
+            )
+        
+        # Generate filename with pattern: CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.{extension}
         # YYMMDDHHSS format: YY (year), MM (month), DD (day), HH (hour), MM (minute) = 10 digits
         timestamp = datetime.now().strftime("%y%m%d%H%M")
-        filename = f"CLIENTID_{request.client_id}_FED_ACH_FILE_{timestamp}.txt"
+        filename = f"CLIENTID_{request.client_id}_FED_ACH_FILE_{timestamp}.{file_ext}"
         
         # Remote path - upload to the uploads directory
         remote_path = f"upload/{filename}"
@@ -336,7 +348,11 @@ async def process_sftp_file(
     oracle_service: OracleService = Depends(get_oracle_service),
     ach_file_blobs_service: AchFileBlobsService = Depends(get_ach_file_blobs_service)
 ):
-    """Process a file from the SFTP server, rename it with client ID, create database records, and archive the file."""
+    """Process a file from the SFTP server, rename it with client ID, create database records, and archive the file.
+    
+    Supported file extensions: .txt, .DAT
+    Example formats: ach_file_20241121.txt, AC20251105B_Generic.DAT
+    """
     file_id = None
     file_blob_id = None
     renamed_filename = None

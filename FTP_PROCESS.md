@@ -71,21 +71,35 @@ This document describes the complete process for processing files from the SFTP 
 }
 ```
 
+**Note**: Supported file extensions include `.txt` and `.DAT`. Example formats:
+- `ach_file_20241121.txt`
+- `AC20251105B_Generic.DAT`
+
 ### Request Parameters
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `file_name` | string | Yes | Name of the file in the SFTP upload folder |
+| `file_name` | string | Yes | Name of the file in the SFTP upload folder (supports .txt and .DAT extensions) |
 | `client_id` | string | Yes | Client ID to prefix to the filename (must exist in active clients) |
 | `created_by_user` | string | No | User who created the record (defaults to "system-user") |
 
 ### Example Request
 
 ```bash
+# Example with .txt file
 curl -X POST "http://localhost:8002/files/process-sftp-file" \
   -H "Content-Type: application/json" \
   -d '{
     "file_name": "ach_file_20241121.txt",
+    "client_id": "6001",
+    "created_by_user": "admin@example.com"
+  }'
+
+# Example with .DAT file (Watertown format)
+curl -X POST "http://localhost:8002/files/process-sftp-file" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_name": "AC20251105B_Generic.DAT",
     "client_id": "6001",
     "created_by_user": "admin@example.com"
   }'

@@ -9,7 +9,7 @@ This plan provides instructions for integrating the `/oracle-auth` endpoint into
 4. Handle the response (authenticated: true/false and is_admin flag)
 
 ---
-
+@Buttermilk1985!!
 ## Backend Endpoint Details
 
 ### Endpoint Information

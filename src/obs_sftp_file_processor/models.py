@@ -54,6 +54,7 @@ class AddSftpAchFileRequest(BaseModel):
     
     file_contents: str = Field(..., description="File contents to upload")
     client_id: str = Field(..., description="Client ID to use in filename pattern")
+    file_extension: str = Field("txt", description="File extension (txt or DAT). Defaults to 'txt'")
 
 
 class AddSftpAchFileResponse(BaseModel):
