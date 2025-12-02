@@ -53,8 +53,7 @@ class AddSftpAchFileRequest(BaseModel):
     """Request model for adding ACH file to SFTP server."""
     
     file_contents: str = Field(..., description="File contents to upload")
-    client_id: str = Field(..., description="Client ID to use in filename pattern")
-    file_extension: str = Field("txt", description="File extension (txt or DAT). Defaults to 'txt'")
+    filename: str = Field(..., description="Filename to use for the uploaded file")
 
 
 class AddSftpAchFileResponse(BaseModel):

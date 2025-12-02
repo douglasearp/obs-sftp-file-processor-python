@@ -294,24 +294,13 @@ async def add_sftp_ach_file(
     request: AddSftpAchFileRequest,
     sftp_service: SFTPService = Depends(get_sftp_service)
 ):
-    """Upload ACH file to SFTP server with filename pattern CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.{extension}
+    """Upload ACH file to SFTP server using the provided filename.
     
-    Supported extensions: .txt, .DAT
-    Example: AC20251105B_Generic.DAT format is supported via process-sftp-file endpoint
+    The filename is used exactly as provided in the request.
     """
     try:
-        # Validate file extension
-        file_ext = request.file_extension.strip().lstrip('.')  # Remove leading dot if present
-        if file_ext.lower() not in ['txt', 'dat']:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid file extension '{file_ext}'. Supported extensions: .txt, .DAT"
-            )
-        
-        # Generate filename with pattern: CLIENTID_{CLIENTID}_FED_ACH_FILE_{YYMMDDHHSS}.{extension}
-        # YYMMDDHHSS format: YY (year), MM (month), DD (day), HH (hour), MM (minute) = 10 digits
-        timestamp = datetime.now().strftime("%y%m%d%H%M")
-        filename = f"CLIENTID_{request.client_id}_FED_ACH_FILE_{timestamp}.{file_ext}"
+        # Use the filename provided in the request
+        filename = request.filename
         
         # Remote path - upload to the uploads directory
         remote_path = f"upload/{filename}"
