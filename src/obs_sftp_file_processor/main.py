@@ -348,16 +348,29 @@ async def process_sftp_file(
     renamed_filename = None
     
     try:
-        # Validate client_id exists
+        # Validate client_id exists and get client_name (if not provided in request)
+        client_name = request.client_name
         with oracle_service:
             clients_data = oracle_service.get_active_clients()
             # Handle both list of dicts (from service) and response object (from endpoint)
             if isinstance(clients_data, list):
                 # Service returns list of dicts
                 client_ids = [client['client_id'] for client in clients_data]
+                # Find client_name for the given client_id if not provided in request
+                if not client_name:
+                    for client in clients_data:
+                        if client['client_id'] == request.client_id:
+                            client_name = client['client_name']
+                            break
             else:
                 # Response object with .clients attribute
                 client_ids = [c.client_id for c in clients_data.clients]
+                # Find client_name for the given client_id if not provided in request
+                if not client_name:
+                    for client in clients_data.clients:
+                        if client.client_id == request.client_id:
+                            client_name = client.client_name
+                            break
             
             if request.client_id not in client_ids:
                 raise HTTPException(
@@ -366,7 +379,7 @@ async def process_sftp_file(
                 )
         
         # Prepare file paths
-        upload_folder = config.sftp.upload_folder
+        upload_folder = request.file_upload_folder or config.sftp.upload_folder
         archived_folder = config.sftp.archived_folder
         source_path = f"{upload_folder}/{request.file_name}" if upload_folder != "." else request.file_name
         
@@ -397,7 +410,12 @@ async def process_sftp_file(
                     original_filename=original_filename,
                     processing_status="Pending",
                     file_contents=file_content_str,
-                    created_by_user=created_by_user
+                    created_by_user=created_by_user,
+                    client_id=request.client_id,
+                    client_name=client_name,
+                    file_upload_folder=upload_folder,
+                    file_upload_filename=request.file_upload_filename or request.file_name,
+                    memo=request.memo
                 )
                 file_id = oracle_service.create_ach_file(ach_file_create)
                 logger.info(f"Created ACH_FILES record with ID: {file_id}")
@@ -423,7 +441,12 @@ async def process_sftp_file(
                     original_filename=original_filename,
                     processing_status="Pending",
                     file_contents=file_content_str,
-                    created_by_user=created_by_user
+                    created_by_user=created_by_user,
+                    client_id=request.client_id,
+                    client_name=client_name,
+                    file_upload_folder=upload_folder,
+                    file_upload_filename=request.file_upload_filename or request.file_name,
+                    memo=request.memo
                 )
                 file_blob_id = ach_file_blobs_service.create_ach_file_blob(ach_file_blob_create)
                 logger.info(f"Created ACH_FILES_BLOBS record with ID: {file_blob_id}")

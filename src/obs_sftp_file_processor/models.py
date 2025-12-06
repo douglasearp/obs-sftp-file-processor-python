@@ -72,6 +72,10 @@ class ProcessSftpFileRequest(BaseModel):
     file_name: str = Field(..., description="Name of the file to process from upload folder")
     client_id: str = Field(..., description="Client ID to add to filename")
     created_by_user: Optional[str] = Field(None, description="User who created the record (optional)")
+    client_name: Optional[str] = Field(None, description="Client name (will be looked up if not provided)")
+    file_upload_folder: Optional[str] = Field(None, description="Folder path where file was uploaded from SFTP (defaults to config.sftp.upload_folder)")
+    file_upload_filename: Optional[str] = Field(None, description="Original filename from SFTP upload folder (defaults to file_name)")
+    memo: Optional[str] = Field(None, description="Memo field for additional notes")
 
 
 class ProcessSftpFileData(BaseModel):

@@ -1,0 +1,39 @@
+ Please add the ACH_CLIENTS.CLIENT_ID to the ACH_FILES TABLE
+ Please add the ACH_CLIENTS.CLIENT_NAME to the ACH_FILES TABLE
+ Please add FILE_UPLOAD_FOLDER VARCHAR2(255) to the ACH_FILES TABLE
+ Please add FILE_UPLOAD_FILENAME VARCHAR2(255)  to the ACH_FILES TABLE
+ Please add MEMO  VARCHAR2(512) to the ACH_FILES TABLE
+ Please update the ACH_FILES_BLOBS to have the fields listed above added to ach_file_blobs
+ Please also add all these Fields listed above to the AUDIT_ACH_FILES table 
+
+Please also update the  
+    TRIGGER TRG_ACH_FILES_AUDIT to have the fields listed above added to the trigger 
+
+create or replace TRIGGER TRG_ACH_FILES_AUDIT
+AFTER INSERT OR UPDATE ON ACH_FILES
+FOR EACH ROW
+BEGIN
+    INSERT INTO AUDIT_ACH_FILES (
+        FILE_ID,
+        ORIGINAL_FILENAME,
+        PROCESSING_STATUS,
+        FILE_CONTENTS,
+        CREATED_BY_USER,
+        CREATED_DATE,
+        UPDATED_BY_USER,
+        UPDATED_DATE
+    )
+    VALUES (
+        :NEW.FILE_ID,
+        :NEW.ORIGINAL_FILENAME,
+        :NEW.PROCESSING_STATUS,
+        :NEW.FILE_CONTENTS,
+        :NEW.CREATED_BY_USER,
+        :NEW.CREATED_DATE,
+        :NEW.UPDATED_BY_USER,
+        :NEW.UPDATED_DATE
+    );
+END;
+
+Please also update all of the APIs in this programs to reflect these changes 
+

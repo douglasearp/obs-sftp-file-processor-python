@@ -18,7 +18,7 @@ INSERT INTO API_USERS (
     'lscarnici',
     '$2b$12$XOH/GqyaSn7bdD/WQOjrIegiuDToXp8BcydQHpCzICoBnsqxbYKBS',  -- @SuperBanker8675309!!
     'lscarnici@openbankingsolutions.com',
-    'Larry Carnici',
+    'Lisa Scarnici',
     1,  -- IS_ACTIVE
     1,  -- IS_ADMIN
     CURRENT_TIMESTAMP

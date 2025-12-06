@@ -128,14 +128,24 @@ class AchFileBlobsService:
                             PROCESSING_STATUS,
                             FILE_CONTENTS,
                             CREATED_BY_USER,
-                            CREATED_DATE
+                            CREATED_DATE,
+                            CLIENT_ID,
+                            CLIENT_NAME,
+                            FILE_UPLOAD_FOLDER,
+                            FILE_UPLOAD_FILENAME,
+                            MEMO
                         ) VALUES (
                             :file_id,
                             :original_filename,
                             :processing_status,
                             EMPTY_CLOB(),
                             :created_by_user,
-                            CURRENT_TIMESTAMP
+                            CURRENT_TIMESTAMP,
+                            :client_id,
+                            :client_name,
+                            :file_upload_folder,
+                            :file_upload_filename,
+                            :memo
                         ) RETURNING FILE_BLOB_ID, FILE_CONTENTS INTO v_file_blob_id, v_clob;
                         
                         :file_blob_id := v_file_blob_id;
@@ -151,6 +161,11 @@ class AchFileBlobsService:
                         'original_filename': ach_file_blob.original_filename,
                         'processing_status': ach_file_blob.processing_status,
                         'created_by_user': ach_file_blob.created_by_user,
+                        'client_id': ach_file_blob.client_id,
+                        'client_name': ach_file_blob.client_name,
+                        'file_upload_folder': ach_file_blob.file_upload_folder,
+                        'file_upload_filename': ach_file_blob.file_upload_filename,
+                        'memo': ach_file_blob.memo,
                         'file_blob_id': file_blob_id,
                         'file_contents_clob': file_contents_clob
                     })
@@ -186,14 +201,24 @@ class AchFileBlobsService:
                     PROCESSING_STATUS,
                     FILE_CONTENTS,
                     CREATED_BY_USER,
-                    CREATED_DATE
+                    CREATED_DATE,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    FILE_UPLOAD_FOLDER,
+                    FILE_UPLOAD_FILENAME,
+                    MEMO
                 ) VALUES (
                     :file_id,
                     :original_filename,
                     :processing_status,
                     :file_contents,
                     :created_by_user,
-                    CURRENT_TIMESTAMP
+                    CURRENT_TIMESTAMP,
+                    :client_id,
+                    :client_name,
+                    :file_upload_folder,
+                    :file_upload_filename,
+                    :memo
                 ) RETURNING FILE_BLOB_ID INTO :file_blob_id
                 """
                 
@@ -205,6 +230,11 @@ class AchFileBlobsService:
                     'processing_status': ach_file_blob.processing_status,
                     'file_contents': ach_file_blob.file_contents,
                     'created_by_user': ach_file_blob.created_by_user,
+                    'client_id': ach_file_blob.client_id,
+                    'client_name': ach_file_blob.client_name,
+                    'file_upload_folder': ach_file_blob.file_upload_folder,
+                    'file_upload_filename': ach_file_blob.file_upload_filename,
+                    'memo': ach_file_blob.memo,
                     'file_blob_id': file_blob_id
                 })
                 
@@ -266,7 +296,12 @@ class AchFileBlobsService:
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
-                    UPDATED_DATE
+                    UPDATED_DATE,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    FILE_UPLOAD_FOLDER,
+                    FILE_UPLOAD_FILENAME,
+                    MEMO
                 FROM ACH_FILES_BLOBS
                 WHERE FILE_BLOB_ID = :file_blob_id
                 """
@@ -284,7 +319,12 @@ class AchFileBlobsService:
                         created_by_user=row[5],
                         created_date=row[6],
                         updated_by_user=row[7],
-                        updated_date=row[8]
+                        updated_date=row[8],
+                        client_id=row[9],
+                        client_name=row[10],
+                        file_upload_folder=row[11],
+                        file_upload_filename=row[12],
+                        memo=row[13]
                     )
                 return None
                 
@@ -308,7 +348,12 @@ class AchFileBlobsService:
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
-                    UPDATED_DATE
+                    UPDATED_DATE,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    FILE_UPLOAD_FOLDER,
+                    FILE_UPLOAD_FILENAME,
+                    MEMO
                 FROM ACH_FILES_BLOBS
                 WHERE FILE_ID = :file_id
                 ORDER BY CREATED_DATE DESC
@@ -328,7 +373,12 @@ class AchFileBlobsService:
                         created_by_user=row[5],
                         created_date=row[6],
                         updated_by_user=row[7],
-                        updated_date=row[8]
+                        updated_date=row[8],
+                        client_id=row[9],
+                        client_name=row[10],
+                        file_upload_folder=row[11],
+                        file_upload_filename=row[12],
+                        memo=row[13]
                     )
                 return None
                 

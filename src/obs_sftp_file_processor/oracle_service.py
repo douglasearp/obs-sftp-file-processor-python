@@ -129,13 +129,23 @@ class OracleService:
                             PROCESSING_STATUS,
                             FILE_CONTENTS,
                             CREATED_BY_USER,
-                            CREATED_DATE
+                            CREATED_DATE,
+                            CLIENT_ID,
+                            CLIENT_NAME,
+                            FILE_UPLOAD_FOLDER,
+                            FILE_UPLOAD_FILENAME,
+                            MEMO
                         ) VALUES (
                             :original_filename,
                             :processing_status,
                             EMPTY_CLOB(),
                             :created_by_user,
-                            CURRENT_TIMESTAMP
+                            CURRENT_TIMESTAMP,
+                            :client_id,
+                            :client_name,
+                            :file_upload_folder,
+                            :file_upload_filename,
+                            :memo
                         ) RETURNING FILE_ID, FILE_CONTENTS INTO v_file_id, v_clob;
                         
                         :file_id := v_file_id;
@@ -150,6 +160,11 @@ class OracleService:
                         'original_filename': ach_file.original_filename,
                         'processing_status': ach_file.processing_status,
                         'created_by_user': ach_file.created_by_user,
+                        'client_id': ach_file.client_id,
+                        'client_name': ach_file.client_name,
+                        'file_upload_folder': ach_file.file_upload_folder,
+                        'file_upload_filename': ach_file.file_upload_filename,
+                        'memo': ach_file.memo,
                         'file_id': file_id,
                         'file_contents_clob': file_contents_clob
                     })
@@ -184,13 +199,23 @@ class OracleService:
                     PROCESSING_STATUS,
                     FILE_CONTENTS,
                     CREATED_BY_USER,
-                    CREATED_DATE
+                    CREATED_DATE,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    FILE_UPLOAD_FOLDER,
+                    FILE_UPLOAD_FILENAME,
+                    MEMO
                 ) VALUES (
                     :original_filename,
                     :processing_status,
                     :file_contents,
                     :created_by_user,
-                    CURRENT_TIMESTAMP
+                    CURRENT_TIMESTAMP,
+                    :client_id,
+                    :client_name,
+                    :file_upload_folder,
+                    :file_upload_filename,
+                    :memo
                 ) RETURNING FILE_ID INTO :file_id
                 """
                 
@@ -201,6 +226,11 @@ class OracleService:
                     'processing_status': ach_file.processing_status,
                     'file_contents': ach_file.file_contents,
                     'created_by_user': ach_file.created_by_user,
+                    'client_id': ach_file.client_id,
+                    'client_name': ach_file.client_name,
+                    'file_upload_folder': ach_file.file_upload_folder,
+                    'file_upload_filename': ach_file.file_upload_filename,
+                    'memo': ach_file.memo,
                     'file_id': file_id
                 })
                 
@@ -229,7 +259,12 @@ class OracleService:
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
-                    UPDATED_DATE
+                    UPDATED_DATE,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    FILE_UPLOAD_FOLDER,
+                    FILE_UPLOAD_FILENAME,
+                    MEMO
                 FROM ACH_FILES 
                 WHERE FILE_ID = :file_id
                 """
@@ -273,7 +308,12 @@ class OracleService:
                         created_by_user=row[4],
                         created_date=row[5],
                         updated_by_user=row[6],
-                        updated_date=row[7]
+                        updated_date=row[7],
+                        client_id=row[8],
+                        client_name=row[9],
+                        file_upload_folder=row[10],
+                        file_upload_filename=row[11],
+                        memo=row[12]
                     )
                 return None
                 
@@ -295,7 +335,12 @@ class OracleService:
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
-                    UPDATED_DATE
+                    UPDATED_DATE,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    FILE_UPLOAD_FOLDER,
+                    FILE_UPLOAD_FILENAME,
+                    MEMO
                 FROM ACH_FILES 
                 WHERE NOT (ORIGINAL_FILENAME LIKE 'FEDACHOUT%' OR ORIGINAL_FILENAME LIKE '%.pdf')
                 ORDER BY CREATED_DATE DESC
@@ -317,7 +362,12 @@ class OracleService:
                         created_by_user=row[3],
                         created_date=row[4],
                         updated_by_user=row[5],
-                        updated_date=row[6]
+                        updated_date=row[6],
+                        client_id=row[7],
+                        client_name=row[8],
+                        file_upload_folder=row[9],
+                        file_upload_filename=row[10],
+                        memo=row[11]
                     ))
                 
                 logger.info(f"Retrieved {len(files)} ACH_FILES records")
@@ -362,6 +412,26 @@ class OracleService:
                     if ach_file.updated_by_user is not None:
                         update_fields.append("UPDATED_BY_USER = :updated_by_user")
                         params['updated_by_user'] = ach_file.updated_by_user
+                    
+                    if ach_file.client_id is not None:
+                        update_fields.append("CLIENT_ID = :client_id")
+                        params['client_id'] = ach_file.client_id
+                    
+                    if ach_file.client_name is not None:
+                        update_fields.append("CLIENT_NAME = :client_name")
+                        params['client_name'] = ach_file.client_name
+                    
+                    if ach_file.file_upload_folder is not None:
+                        update_fields.append("FILE_UPLOAD_FOLDER = :file_upload_folder")
+                        params['file_upload_folder'] = ach_file.file_upload_folder
+                    
+                    if ach_file.file_upload_filename is not None:
+                        update_fields.append("FILE_UPLOAD_FILENAME = :file_upload_filename")
+                        params['file_upload_filename'] = ach_file.file_upload_filename
+                    
+                    if ach_file.memo is not None:
+                        update_fields.append("MEMO = :memo")
+                        params['memo'] = ach_file.memo
                     
                     if update_fields:
                         update_fields.append("UPDATED_DATE = CURRENT_TIMESTAMP")
@@ -424,6 +494,26 @@ class OracleService:
                 if ach_file.updated_by_user is not None:
                     update_fields.append("UPDATED_BY_USER = :updated_by_user")
                     params['updated_by_user'] = ach_file.updated_by_user
+                
+                if ach_file.client_id is not None:
+                    update_fields.append("CLIENT_ID = :client_id")
+                    params['client_id'] = ach_file.client_id
+                
+                if ach_file.client_name is not None:
+                    update_fields.append("CLIENT_NAME = :client_name")
+                    params['client_name'] = ach_file.client_name
+                
+                if ach_file.file_upload_folder is not None:
+                    update_fields.append("FILE_UPLOAD_FOLDER = :file_upload_folder")
+                    params['file_upload_folder'] = ach_file.file_upload_folder
+                
+                if ach_file.file_upload_filename is not None:
+                    update_fields.append("FILE_UPLOAD_FILENAME = :file_upload_filename")
+                    params['file_upload_filename'] = ach_file.file_upload_filename
+                
+                if ach_file.memo is not None:
+                    update_fields.append("MEMO = :memo")
+                    params['memo'] = ach_file.memo
                 
                 if not update_fields:
                     return False  # No fields to update
@@ -589,7 +679,12 @@ class OracleService:
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
-                    UPDATED_DATE
+                    UPDATED_DATE,
+                    CLIENT_ID,
+                    CLIENT_NAME,
+                    FILE_UPLOAD_FOLDER,
+                    FILE_UPLOAD_FILENAME,
+                    MEMO
                 FROM AUDIT_ACH_FILES 
                 WHERE FILE_ID = :file_id
                 ORDER BY AUDIT_ID DESC
@@ -614,7 +709,12 @@ class OracleService:
                         'created_by_user': row[5],
                         'created_date': row[6],
                         'updated_by_user': row[7],
-                        'updated_date': row[8]
+                        'updated_date': row[8],
+                        'client_id': row[9],
+                        'client_name': row[10],
+                        'file_upload_folder': row[11],
+                        'file_upload_filename': row[12],
+                        'memo': row[13]
                     })
                 
                 logger.info(f"Retrieved {len(audit_records)} AUDIT_ACH_FILES records for FILE_ID: {file_id}")

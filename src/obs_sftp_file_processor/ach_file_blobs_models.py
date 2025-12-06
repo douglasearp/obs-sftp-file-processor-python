@@ -14,6 +14,11 @@ class AchFileBlobBase(BaseModel):
     file_contents: Optional[str] = Field(None, description="File contents as CLOB")
     created_by_user: str = Field("UnityBankUserName@UB.com", description="User who created the record")
     updated_by_user: Optional[str] = Field(None, description="User who last updated the record")
+    client_id: Optional[str] = Field(None, description="Client ID from ACH_CLIENTS table")
+    client_name: Optional[str] = Field(None, description="Client name from ACH_CLIENTS table")
+    file_upload_folder: Optional[str] = Field(None, description="Folder path where file was uploaded from SFTP")
+    file_upload_filename: Optional[str] = Field(None, description="Original filename from SFTP upload folder")
+    memo: Optional[str] = Field(None, description="Memo field for additional notes")
 
 
 class AchFileBlobCreate(AchFileBlobBase):
@@ -27,6 +32,11 @@ class AchFileBlobUpdate(BaseModel):
     processing_status: Optional[str] = Field(None, description="Processing status")
     file_contents: Optional[str] = Field(None, description="File contents as CLOB")
     updated_by_user: Optional[str] = Field(None, description="User who updated the record")
+    client_id: Optional[str] = Field(None, description="Client ID from ACH_CLIENTS table")
+    client_name: Optional[str] = Field(None, description="Client name from ACH_CLIENTS table")
+    file_upload_folder: Optional[str] = Field(None, description="Folder path where file was uploaded from SFTP")
+    file_upload_filename: Optional[str] = Field(None, description="Original filename from SFTP upload folder")
+    memo: Optional[str] = Field(None, description="Memo field for additional notes")
 
 
 class AchFileBlob(AchFileBlobBase):
@@ -52,6 +62,11 @@ class AchFileBlobResponse(BaseModel):
     created_date: datetime
     updated_by_user: Optional[str] = None
     updated_date: Optional[datetime] = None
+    client_id: Optional[str] = None
+    client_name: Optional[str] = None
+    file_upload_folder: Optional[str] = None
+    file_upload_filename: Optional[str] = None
+    memo: Optional[str] = None
     
     class Config:
         from_attributes = True
