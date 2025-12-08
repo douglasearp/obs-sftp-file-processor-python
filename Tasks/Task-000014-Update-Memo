@@ -1,0 +1,31 @@
+   When you execute the files/process_sftp_file please also update the memo field in the ACH_FILES table with the four fields from the file contents File Header Record:
+   
+    Please add these fields to the Memo field in ACH_FILES table when you save from the file contents File Header Record:
+    "immediate_destination",
+    "immediate_destination_name",
+    "immediate_origin",
+    "immediate_origin_name"
+
+    Please have the update the Memo format look like this with the infomration pulled from the file contents File Header Record:
+    Immediate Destination: [Immediate Destination] Immediate Destination Name: [Immediate Destination Name] Immediate Origin: [Immediate Origin] Immediate Origin Name: [Immediate Origin Name]
+
+
+
+Referene Information:
+File Header Record: 
+Field	Position	Length	Description	Format
+Record Type Code	01-01	1	Always '1'	Numeric
+Priority Code	02-03	2	Usually '01'	Numeric
+Immediate Destination	04-13	10	Routing number of destination bank (space-padded)	Numeric
+Immediate Origin	14-23	10	Originator's routing number or company ID	Alphanumeric
+File Creation Date	24-29	6	File creation date (YYMMDD)	Numeric
+File Creation Time	30-33	4	File creation time (HHMM, 24-hour)	Numeric
+File ID Modifier	34-34	1	Unique file identifier (e.g., 'A', 'B')	Alphanumeric
+Record Size	35-37	3	Always '094'	Numeric
+Blocking Factor	38-39	2	Always '10'	Numeric
+Format Code	40-40	1	Always '1'	Numeric
+Immediate Destination Name	41-63	23	Name of destination bank	Alphanumeric
+Immediate Origin Name	64-86	23	Name of originating entity	Alphanumeric
+Reference Code	87-94	8	Optional reference code	Alphanumeric
+
+

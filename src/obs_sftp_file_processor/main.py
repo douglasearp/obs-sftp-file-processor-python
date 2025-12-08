@@ -114,6 +114,69 @@ def get_ach_file_blobs_service() -> AchFileBlobsService:
     return AchFileBlobsService(config.oracle)
 
 
+def parse_file_header_record(file_content: str) -> Optional[dict]:
+    """Parse File Header Record (record type '1') from ACH file content.
+    
+    Extracts the four required fields:
+    - immediate_destination (positions 4-13)
+    - immediate_destination_name (positions 41-63)
+    - immediate_origin (positions 14-23)
+    - immediate_origin_name (positions 64-86)
+    
+    Returns a dictionary with the extracted fields, or None if File Header Record not found.
+    """
+    if not file_content:
+        return None
+    
+    # Split file into lines
+    lines = file_content.split('\n')
+    
+    # Find the first non-empty line that starts with '1' (File Header Record)
+    for line in lines:
+        line = line.rstrip('\r')
+        if not line.strip():
+            continue
+        
+        # Check if this is a File Header Record (starts with '1')
+        if len(line) >= 1 and line[0] == '1':
+            # Ensure line is at least 86 characters (minimum for all required fields)
+            if len(line) < 86:
+                logger.warning(f"File Header Record too short: {len(line)} characters")
+                return None
+            
+            # Extract fields based on ACH specification
+            # Positions are 1-based in spec, but Python is 0-based
+            immediate_destination = line[3:13].strip() if len(line) >= 13 else ""
+            immediate_origin = line[13:23].strip() if len(line) >= 23 else ""
+            immediate_destination_name = line[40:63].strip() if len(line) >= 63 else ""
+            immediate_origin_name = line[63:86].strip() if len(line) >= 86 else ""
+            
+            return {
+                "immediate_destination": immediate_destination,
+                "immediate_destination_name": immediate_destination_name,
+                "immediate_origin": immediate_origin,
+                "immediate_origin_name": immediate_origin_name
+            }
+    
+    # File Header Record not found
+    logger.warning("File Header Record (record type '1') not found in file content")
+    return None
+
+
+def format_memo_from_file_header(file_header_data: dict) -> str:
+    """Format memo string from File Header Record data.
+    
+    Format: Immediate Destination: [value] Immediate Destination Name: [value] 
+            Immediate Origin: [value] Immediate Origin Name: [value]
+    """
+    return (
+        f"Immediate Destination: {file_header_data.get('immediate_destination', '')} "
+        f"Immediate Destination Name: {file_header_data.get('immediate_destination_name', '')} "
+        f"Immediate Origin: {file_header_data.get('immediate_origin', '')} "
+        f"Immediate Origin Name: {file_header_data.get('immediate_origin_name', '')}"
+    )
+
+
 @app.get("/", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
@@ -403,6 +466,19 @@ async def process_sftp_file(
         # Set created_by_user
         created_by_user = request.created_by_user or "system-user"
         
+        # Parse File Header Record and extract memo fields
+        file_header_data = parse_file_header_record(file_content_str)
+        memo = None
+        if file_header_data:
+            memo = format_memo_from_file_header(file_header_data)
+            logger.info(f"Extracted File Header Record fields for memo: {memo}")
+        else:
+            logger.warning(f"Could not parse File Header Record from file {original_filename}, memo will not be set from file header")
+        
+        # If request.memo is provided, it takes precedence (or could be merged)
+        # For now, use file header memo if available, otherwise use request.memo
+        final_memo = memo or request.memo
+        
         # Create ACH_FILES record
         try:
             with oracle_service:
@@ -415,7 +491,7 @@ async def process_sftp_file(
                     client_name=client_name,
                     file_upload_folder=upload_folder,
                     file_upload_filename=request.file_upload_filename or request.file_name,
-                    memo=request.memo
+                    memo=final_memo
                 )
                 file_id = oracle_service.create_ach_file(ach_file_create)
                 logger.info(f"Created ACH_FILES record with ID: {file_id}")
@@ -446,7 +522,7 @@ async def process_sftp_file(
                     client_name=client_name,
                     file_upload_folder=upload_folder,
                     file_upload_filename=request.file_upload_filename or request.file_name,
-                    memo=request.memo
+                    memo=final_memo
                 )
                 file_blob_id = ach_file_blobs_service.create_ach_file_blob(ach_file_blob_create)
                 logger.info(f"Created ACH_FILES_BLOBS record with ID: {file_blob_id}")
