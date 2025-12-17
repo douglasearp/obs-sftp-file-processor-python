@@ -7,6 +7,14 @@ from datetime import datetime
 from loguru import logger
 from .oracle_config import OracleConfig
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse
+from .ach_record_models import (
+    AchFileHeaderCreate,
+    AchBatchHeaderCreate,
+    AchEntryDetailCreate,
+    AchAddendaCreate,
+    AchBatchControlCreate,
+    AchFileControlCreate
+)
 
 
 class OracleService:
@@ -844,4 +852,354 @@ class OracleService:
                 
         except Exception as e:
             logger.error(f"Failed to check email and password hash: {e}")
+            raise
+    
+    def insert_ach_file_header(self, file_id: int, record: AchFileHeaderCreate) -> int:
+        """Insert ACH_FILE_HEADER record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO ACH_FILE_HEADER (
+                        FILE_HEADER_ID, FILE_ID, RECORD_TYPE_CODE, PRIORITY_CODE,
+                        IMMEDIATE_DESTINATION, IMMEDIATE_ORIGIN, FILE_CREATION_DATE,
+                        FILE_CREATION_TIME, FILE_ID_MODIFIER, RECORD_SIZE,
+                        BLOCKING_FACTOR, FORMAT_CODE, IMMEDIATE_DEST_NAME,
+                        IMMEDIATE_ORIGIN_NAME, REFERENCE_CODE, RAW_RECORD
+                    ) VALUES (
+                        SEQ_FILE_HEADER.NEXTVAL, :file_id, :record_type_code, :priority_code,
+                        :immediate_destination, :immediate_origin, :file_creation_date,
+                        :file_creation_time, :file_id_modifier, :record_size,
+                        :blocking_factor, :format_code, :immediate_dest_name,
+                        :immediate_origin_name, :reference_code, :raw_record
+                    )
+                """, {
+                    'file_id': file_id,
+                    'record_type_code': record.record_type_code,
+                    'priority_code': record.priority_code,
+                    'immediate_destination': record.immediate_destination,
+                    'immediate_origin': record.immediate_origin,
+                    'file_creation_date': record.file_creation_date,
+                    'file_creation_time': record.file_creation_time,
+                    'file_id_modifier': record.file_id_modifier,
+                    'record_size': record.record_size,
+                    'blocking_factor': record.blocking_factor,
+                    'format_code': record.format_code,
+                    'immediate_dest_name': record.immediate_dest_name,
+                    'immediate_origin_name': record.immediate_origin_name,
+                    'reference_code': record.reference_code,
+                    'raw_record': record.raw_record
+                })
+                conn.commit()
+                cursor.execute("SELECT SEQ_FILE_HEADER.CURRVAL FROM DUAL")
+                header_id = cursor.fetchone()[0]
+                logger.info(f"Inserted ACH_FILE_HEADER record {header_id} for file_id {file_id}")
+                return header_id
+        except Exception as e:
+            logger.error(f"Failed to insert ACH_FILE_HEADER: {e}")
+            raise
+    
+    def insert_ach_batch_header(self, file_id: int, record: AchBatchHeaderCreate) -> int:
+        """Insert ACH_BATCH_HEADER record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO ACH_BATCH_HEADER (
+                        BATCH_HEADER_ID, FILE_ID, BATCH_NUMBER, RECORD_TYPE_CODE,
+                        SERVICE_CLASS_CODE, COMPANY_NAME, COMPANY_DISCRETIONARY_DATA,
+                        COMPANY_IDENTIFICATION, STANDARD_ENTRY_CLASS_CODE,
+                        COMPANY_ENTRY_DESCRIPTION, COMPANY_DESCRIPTIVE_DATE,
+                        EFFECTIVE_ENTRY_DATE, SETTLEMENT_DATE, ORIGINATOR_STATUS_CODE,
+                        ORIGINATING_DFI_ID, RAW_RECORD
+                    ) VALUES (
+                        SEQ_BATCH_HEADER.NEXTVAL, :file_id, :batch_number, :record_type_code,
+                        :service_class_code, :company_name, :company_discretionary_data,
+                        :company_identification, :standard_entry_class_code,
+                        :company_entry_description, :company_descriptive_date,
+                        :effective_entry_date, :settlement_date, :originator_status_code,
+                        :originating_dfi_id, :raw_record
+                    )
+                """, {
+                    'file_id': file_id,
+                    'batch_number': record.batch_number,
+                    'record_type_code': record.record_type_code,
+                    'service_class_code': record.service_class_code,
+                    'company_name': record.company_name,
+                    'company_discretionary_data': record.company_discretionary_data,
+                    'company_identification': record.company_identification,
+                    'standard_entry_class_code': record.standard_entry_class_code,
+                    'company_entry_description': record.company_entry_description,
+                    'company_descriptive_date': record.company_descriptive_date,
+                    'effective_entry_date': record.effective_entry_date,
+                    'settlement_date': record.settlement_date,
+                    'originator_status_code': record.originator_status_code,
+                    'originating_dfi_id': record.originating_dfi_id,
+                    'raw_record': record.raw_record
+                })
+                conn.commit()
+                cursor.execute("SELECT SEQ_BATCH_HEADER.CURRVAL FROM DUAL")
+                header_id = cursor.fetchone()[0]
+                logger.info(f"Inserted ACH_BATCH_HEADER record {header_id} for file_id {file_id}, batch {record.batch_number}")
+                return header_id
+        except Exception as e:
+            logger.error(f"Failed to insert ACH_BATCH_HEADER: {e}")
+            raise
+    
+    def insert_ach_entry_detail(self, file_id: int, record: AchEntryDetailCreate) -> int:
+        """Insert ACH_ENTRY_DETAIL record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO ACH_ENTRY_DETAIL (
+                        ENTRY_DETAIL_ID, FILE_ID, BATCH_NUMBER, RECORD_TYPE_CODE,
+                        TRANSACTION_CODE, RECEIVING_DFI_ID, CHECK_DIGIT,
+                        DFI_ACCOUNT_NUMBER, AMOUNT, AMOUNT_DECIMAL,
+                        INDIVIDUAL_ID_NUMBER, INDIVIDUAL_NAME, DISCRETIONARY_DATA,
+                        ADDENDA_RECORD_INDICATOR, TRACE_NUMBER, TRACE_SEQUENCE_NUMBER,
+                        RAW_RECORD
+                    ) VALUES (
+                        SEQ_ENTRY_DETAIL.NEXTVAL, :file_id, :batch_number, :record_type_code,
+                        :transaction_code, :receiving_dfi_id, :check_digit,
+                        :dfi_account_number, :amount, :amount_decimal,
+                        :individual_id_number, :individual_name, :discretionary_data,
+                        :addenda_record_indicator, :trace_number, :trace_sequence_number,
+                        :raw_record
+                    )
+                """, {
+                    'file_id': file_id,
+                    'batch_number': record.batch_number,
+                    'record_type_code': record.record_type_code,
+                    'transaction_code': record.transaction_code,
+                    'receiving_dfi_id': record.receiving_dfi_id,
+                    'check_digit': record.check_digit,
+                    'dfi_account_number': record.dfi_account_number,
+                    'amount': record.amount,
+                    'amount_decimal': record.amount_decimal,
+                    'individual_id_number': record.individual_id_number,
+                    'individual_name': record.individual_name,
+                    'discretionary_data': record.discretionary_data,
+                    'addenda_record_indicator': record.addenda_record_indicator,
+                    'trace_number': record.trace_number,
+                    'trace_sequence_number': record.trace_sequence_number,
+                    'raw_record': record.raw_record
+                })
+                conn.commit()
+                cursor.execute("SELECT SEQ_ENTRY_DETAIL.CURRVAL FROM DUAL")
+                entry_id = cursor.fetchone()[0]
+                logger.info(f"Inserted ACH_ENTRY_DETAIL record {entry_id} for file_id {file_id}, batch {record.batch_number}")
+                return entry_id
+        except Exception as e:
+            logger.error(f"Failed to insert ACH_ENTRY_DETAIL: {e}")
+            raise
+    
+    def insert_ach_addenda(self, file_id: int, record: AchAddendaCreate, entry_detail_id: Optional[int] = None) -> int:
+        """Insert ACH_ADDENDA record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO ACH_ADDENDA (
+                        ADDENDA_ID, FILE_ID, ENTRY_DETAIL_ID, BATCH_NUMBER,
+                        RECORD_TYPE_CODE, ADDENDA_TYPE_CODE, PAYMENT_RELATED_INFO,
+                        ADDENDA_SEQUENCE_NUMBER, ENTRY_DETAIL_SEQUENCE_NUM, RAW_RECORD
+                    ) VALUES (
+                        SEQ_ADDENDA.NEXTVAL, :file_id, :entry_detail_id, :batch_number,
+                        :record_type_code, :addenda_type_code, :payment_related_info,
+                        :addenda_sequence_number, :entry_detail_sequence_num, :raw_record
+                    )
+                """, {
+                    'file_id': file_id,
+                    'entry_detail_id': entry_detail_id,
+                    'batch_number': record.batch_number,
+                    'record_type_code': record.record_type_code,
+                    'addenda_type_code': record.addenda_type_code,
+                    'payment_related_info': record.payment_related_info,
+                    'addenda_sequence_number': record.addenda_sequence_number,
+                    'entry_detail_sequence_num': record.entry_detail_sequence_num,
+                    'raw_record': record.raw_record
+                })
+                conn.commit()
+                cursor.execute("SELECT SEQ_ADDENDA.CURRVAL FROM DUAL")
+                addenda_id = cursor.fetchone()[0]
+                logger.info(f"Inserted ACH_ADDENDA record {addenda_id} for file_id {file_id}, batch {record.batch_number}")
+                return addenda_id
+        except Exception as e:
+            logger.error(f"Failed to insert ACH_ADDENDA: {e}")
+            raise
+    
+    def insert_ach_batch_control(self, file_id: int, record: AchBatchControlCreate) -> int:
+        """Insert ACH_BATCH_CONTROL record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO ACH_BATCH_CONTROL (
+                        BATCH_CONTROL_ID, FILE_ID, BATCH_NUMBER, RECORD_TYPE_CODE,
+                        SERVICE_CLASS_CODE, ENTRY_ADDENDA_COUNT, ENTRY_HASH,
+                        TOTAL_DEBIT_AMOUNT, TOTAL_DEBIT_AMOUNT_DECIMAL,
+                        TOTAL_CREDIT_AMOUNT, TOTAL_CREDIT_AMOUNT_DECIMAL,
+                        COMPANY_IDENTIFICATION, MESSAGE_AUTH_CODE, RESERVED,
+                        ORIGINATING_DFI_ID, RAW_RECORD
+                    ) VALUES (
+                        SEQ_BATCH_CONTROL.NEXTVAL, :file_id, :batch_number, :record_type_code,
+                        :service_class_code, :entry_addenda_count, :entry_hash,
+                        :total_debit_amount, :total_debit_amount_decimal,
+                        :total_credit_amount, :total_credit_amount_decimal,
+                        :company_identification, :message_auth_code, :reserved,
+                        :originating_dfi_id, :raw_record
+                    )
+                """, {
+                    'file_id': file_id,
+                    'batch_number': record.batch_number,
+                    'record_type_code': record.record_type_code,
+                    'service_class_code': record.service_class_code,
+                    'entry_addenda_count': record.entry_addenda_count,
+                    'entry_hash': record.entry_hash,
+                    'total_debit_amount': record.total_debit_amount,
+                    'total_debit_amount_decimal': record.total_debit_amount_decimal,
+                    'total_credit_amount': record.total_credit_amount,
+                    'total_credit_amount_decimal': record.total_credit_amount_decimal,
+                    'company_identification': record.company_identification,
+                    'message_auth_code': record.message_auth_code,
+                    'reserved': record.reserved,
+                    'originating_dfi_id': record.originating_dfi_id,
+                    'raw_record': record.raw_record
+                })
+                conn.commit()
+                cursor.execute("SELECT SEQ_BATCH_CONTROL.CURRVAL FROM DUAL")
+                control_id = cursor.fetchone()[0]
+                logger.info(f"Inserted ACH_BATCH_CONTROL record {control_id} for file_id {file_id}, batch {record.batch_number}")
+                return control_id
+        except Exception as e:
+            logger.error(f"Failed to insert ACH_BATCH_CONTROL: {e}")
+            raise
+    
+    def insert_ach_file_control(self, file_id: int, record: AchFileControlCreate) -> int:
+        """Insert ACH_FILE_CONTROL record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO ACH_FILE_CONTROL (
+                        FILE_CONTROL_ID, FILE_ID, RECORD_TYPE_CODE, BATCH_COUNT,
+                        BLOCK_COUNT, ENTRY_ADDENDA_COUNT, ENTRY_HASH,
+                        TOTAL_DEBIT_AMOUNT, TOTAL_DEBIT_AMOUNT_DECIMAL,
+                        TOTAL_CREDIT_AMOUNT, TOTAL_CREDIT_AMOUNT_DECIMAL,
+                        RESERVED, RAW_RECORD
+                    ) VALUES (
+                        SEQ_FILE_CONTROL.NEXTVAL, :file_id, :record_type_code, :batch_count,
+                        :block_count, :entry_addenda_count, :entry_hash,
+                        :total_debit_amount, :total_debit_amount_decimal,
+                        :total_credit_amount, :total_credit_amount_decimal,
+                        :reserved, :raw_record
+                    )
+                """, {
+                    'file_id': file_id,
+                    'record_type_code': record.record_type_code,
+                    'batch_count': record.batch_count,
+                    'block_count': record.block_count,
+                    'entry_addenda_count': record.entry_addenda_count,
+                    'entry_hash': record.entry_hash,
+                    'total_debit_amount': record.total_debit_amount,
+                    'total_debit_amount_decimal': record.total_debit_amount_decimal,
+                    'total_credit_amount': record.total_credit_amount,
+                    'total_credit_amount_decimal': record.total_credit_amount_decimal,
+                    'reserved': record.reserved,
+                    'raw_record': record.raw_record
+                })
+                conn.commit()
+                cursor.execute("SELECT SEQ_FILE_CONTROL.CURRVAL FROM DUAL")
+                control_id = cursor.fetchone()[0]
+                logger.info(f"Inserted ACH_FILE_CONTROL record {control_id} for file_id {file_id}")
+                return control_id
+        except Exception as e:
+            logger.error(f"Failed to insert ACH_FILE_CONTROL: {e}")
+            raise
+    
+    def parse_and_insert_ach_records(self, file_id: int, file_contents: str) -> Dict[str, int]:
+        """Parse ACH file contents and insert records into appropriate tables.
+        
+        Returns a dictionary with counts of inserted records:
+        {
+            'file_headers': count,
+            'batch_headers': count,
+            'entry_details': count,
+            'addendas': count,
+            'batch_controls': count,
+            'file_controls': count
+        }
+        """
+        from .ach_record_parser import ACHRecordParser
+        
+        try:
+            # Parse file content
+            parsed_records = ACHRecordParser.parse_file_content(file_contents)
+            
+            counts = {
+                'file_headers': 0,
+                'batch_headers': 0,
+                'entry_details': 0,
+                'addendas': 0,
+                'batch_controls': 0,
+                'file_controls': 0
+            }
+            
+            # Track entry details for linking addendas
+            entry_detail_map = {}  # Maps (batch_number, trace_sequence) -> entry_detail_id
+            
+            # Insert file headers
+            for record in parsed_records['file_headers']:
+                record.file_id = file_id
+                self.insert_ach_file_header(file_id, record)
+                counts['file_headers'] += 1
+            
+            # Insert batch headers
+            for record in parsed_records['batch_headers']:
+                record.file_id = file_id
+                self.insert_ach_batch_header(file_id, record)
+                counts['batch_headers'] += 1
+            
+            # Insert entry details
+            for record in parsed_records['entry_details']:
+                record.file_id = file_id
+                entry_id = self.insert_ach_entry_detail(file_id, record)
+                counts['entry_details'] += 1
+                
+                # Store entry detail ID for linking addendas
+                if record.trace_sequence_number:
+                    key = (record.batch_number, record.trace_sequence_number)
+                    entry_detail_map[key] = entry_id
+            
+            # Insert addendas (try to link to entry details)
+            for record in parsed_records['addendas']:
+                record.file_id = file_id
+                entry_detail_id = None
+                
+                # Try to find matching entry detail
+                if record.entry_detail_sequence_num:
+                    key = (record.batch_number, record.entry_detail_sequence_num)
+                    entry_detail_id = entry_detail_map.get(key)
+                
+                self.insert_ach_addenda(file_id, record, entry_detail_id)
+                counts['addendas'] += 1
+            
+            # Insert batch controls
+            for record in parsed_records['batch_controls']:
+                record.file_id = file_id
+                self.insert_ach_batch_control(file_id, record)
+                counts['batch_controls'] += 1
+            
+            # Insert file controls
+            for record in parsed_records['file_controls']:
+                record.file_id = file_id
+                self.insert_ach_file_control(file_id, record)
+                counts['file_controls'] += 1
+            
+            logger.info(f"Parsed and inserted ACH records for file_id {file_id}: {counts}")
+            return counts
+            
+        except Exception as e:
+            logger.error(f"Failed to parse and insert ACH records for file_id {file_id}: {e}")
             raise

@@ -1046,9 +1046,37 @@ async def update_ach_file_by_file_id(
     request: AchFileUpdateByFileIdRequest,
     oracle_service: OracleService = Depends(get_oracle_service)
 ):
-    """Update ACH_FILES record by file_id with file_contents, updated_by_user, and updated_date."""
+    """Update ACH_FILES record by file_id with file_contents, updated_by_user, and updated_date.
+    
+    Also parses the file contents and inserts records into appropriate ACH record type tables:
+    - ACH_FILE_HEADER (record type 1)
+    - ACH_BATCH_HEADER (record type 5)
+    - ACH_ENTRY_DETAIL (record type 6)
+    - ACH_ADDENDA (record type 7)
+    - ACH_BATCH_CONTROL (record type 8)
+    - ACH_FILE_CONTROL (record type 9)
+    """
     try:
         with oracle_service:
+            # First, delete existing records for this file_id to avoid duplicates
+            # (This ensures clean re-processing if the file is updated)
+            try:
+                with oracle_service.get_connection() as conn:
+                    cursor = conn.cursor()
+                    # Delete in reverse order of dependencies
+                    cursor.execute("DELETE FROM ACH_ADDENDA WHERE FILE_ID = :file_id", {'file_id': file_id})
+                    cursor.execute("DELETE FROM ACH_ENTRY_DETAIL WHERE FILE_ID = :file_id", {'file_id': file_id})
+                    cursor.execute("DELETE FROM ACH_BATCH_CONTROL WHERE FILE_ID = :file_id", {'file_id': file_id})
+                    cursor.execute("DELETE FROM ACH_BATCH_HEADER WHERE FILE_ID = :file_id", {'file_id': file_id})
+                    cursor.execute("DELETE FROM ACH_FILE_CONTROL WHERE FILE_ID = :file_id", {'file_id': file_id})
+                    cursor.execute("DELETE FROM ACH_FILE_HEADER WHERE FILE_ID = :file_id", {'file_id': file_id})
+                    conn.commit()
+                    logger.info(f"Deleted existing ACH records for file_id {file_id}")
+            except Exception as e:
+                logger.warning(f"Failed to delete existing records (may not exist): {e}")
+                # Continue anyway - records may not exist yet
+            
+            # Update the ACH_FILES record
             success = oracle_service.update_ach_file_by_file_id(
                 file_id=file_id,
                 file_contents=request.file_contents,
@@ -1061,6 +1089,18 @@ async def update_ach_file_by_file_id(
                     status_code=404,
                     detail=f"ACH_FILES record not found: {file_id}"
                 )
+            
+            # Parse and insert ACH records into appropriate tables
+            try:
+                record_counts = oracle_service.parse_and_insert_ach_records(
+                    file_id=file_id,
+                    file_contents=request.file_contents
+                )
+                logger.info(f"Successfully parsed and inserted ACH records for file_id {file_id}: {record_counts}")
+            except Exception as e:
+                logger.error(f"Failed to parse and insert ACH records for file_id {file_id}: {e}")
+                # Don't fail the entire request - file was updated successfully
+                # Just log the error
             
             # Get the updated record
             updated_file = oracle_service.get_ach_file(file_id)
