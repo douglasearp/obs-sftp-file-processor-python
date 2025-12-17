@@ -12,7 +12,7 @@ class OracleConfig(BaseSettings):
     port: int = Field(1521, description="Oracle database port")
     service_name: str = Field("PDB_ACHDEV01.privatesubnet1.obsnetwork1.oraclevcn.com", description="Oracle service name")
     username: str = Field("achowner", description="Oracle username")
-    password: str = Field("TLcbbhQuiV7##sLv4tMr", description="Oracle password")
+    password: str = Field("JV!+x21=Of`jVzW[%)/r@", description="Oracle password")
     db_schema: str = Field("ACHOWNER", description="Oracle schema name", validation_alias="schema")
     
     # Connection pool settings

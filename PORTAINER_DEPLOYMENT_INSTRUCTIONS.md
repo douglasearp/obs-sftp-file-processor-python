@@ -92,7 +92,7 @@ docker images | grep obs-sftp-file-processor
    ORACLE_PORT=1521
    ORACLE_SERVICE_NAME=PDB_ACHDEV01.privatesubnet1.obsnetwork1.oraclevcn.com
    ORACLE_USERNAME=achowner
-   ORACLE_PASSWORD=TLcbbhQuiV7##sLv4tMr
+   ORACLE_PASSWORD=JV!+x21=Of`jVzW[%)/r@ 
    ORACLE_SCHEMA=ACHOWNER
    ORACLE_HOME=/opt/oracle/instantclient_23_3
    

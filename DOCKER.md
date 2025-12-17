@@ -53,7 +53,7 @@ This guide explains how to build and run the obs-sftp-file-processor application
      -e ORACLE_PORT=1521 \
      -e ORACLE_SERVICE_NAME=PDB_ACHDEV01.privatesubnet1.obsnetwork1.oraclevcn.com \
      -e ORACLE_USERNAME=achowner \
-     -e ORACLE_PASSWORD=TLcbbhQuiV7##sLv4tMr \
+     -e ORACLE_PASSWORD=JV!+x21=Of`jVzW[%)/r@  \
      -e ORACLE_SCHEMA=ACHOWNER \
      -v $(pwd)/logs:/app/logs \
      obs-sftp-file-processor
