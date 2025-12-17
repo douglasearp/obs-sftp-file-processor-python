@@ -12,7 +12,10 @@ Example the Batch Control Record is the fifth record in the file for record type
 
 Example the File Control Record is the sixth record in the file for record type 9 goes into the ACH_FILE_CONTROL table          
 
+Please add this process of copying the data from the FILE_CONTENTS into the appropriate tables to the API /api/oracle/ach-files-update-by-file-id/${file_id}
 Please execute this process to copy the FILE_CONTENTS into the appropriate tables when this process is executed /api/oracle/ach-files-update-by-file-id/${file_id}
+
+These tables listed below have already been created in Oracle.
 
 Here is the new table in Oracle that the data needs to be read into:
 -- File Header Record (Type Code: 1)
