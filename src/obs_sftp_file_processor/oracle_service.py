@@ -1203,3 +1203,153 @@ class OracleService:
         except Exception as e:
             logger.error(f"Failed to parse and insert ACH records for file_id {file_id}: {e}")
             raise
+    
+    def get_ach_data_for_core_post_sp_approved(
+        self,
+        file_id: Optional[int] = None,
+        client_id: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Get ACH data for Core Post Stored Procedure (approved files only).
+        
+        Returns entry detail records with all related data needed for the stored procedure.
+        
+        Args:
+            file_id: Optional filter by specific file_id
+            client_id: Optional filter by specific client_id
+            limit: Optional limit number of records
+            offset: Optional offset for pagination
+            
+        Returns:
+            List of dictionaries containing ACH data for each entry detail record
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build WHERE clause dynamically
+                where_conditions = [
+                    "ed.RECORD_TYPE_CODE = '6'",
+                    "af.PROCESSING_STATUS = 'APPROVED'"
+                ]
+                params = {}
+                
+                if file_id is not None:
+                    where_conditions.append("ed.FILE_ID = :file_id")
+                    params['file_id'] = file_id
+                
+                if client_id is not None:
+                    where_conditions.append("af.CLIENT_ID = :client_id")
+                    params['client_id'] = client_id
+                
+                where_clause = " AND ".join(where_conditions)
+                
+                # Build query with optional pagination
+                query = f"""
+                    SELECT
+                        -- Trace Sequence Number (GN_SECUENCIACONVENIO)
+                        ed.TRACE_SEQUENCE_NUMBER AS trace_sequence_number,
+                        
+                        -- Client ID (GN_CODIGOCLIENTE)
+                        af.CLIENT_ID AS client_id,
+                        
+                        -- Origin Agency (GN_AGENCIACTAORIGEN)
+                        SUBSTR(bh.ORIGINATING_DFI_ID, 1, 3) AS origin_agency,
+                        
+                        -- Origin Sub-account (GN_SUBCTAORIGEN)
+                        0 AS origin_sub_account,
+                        
+                        -- ACH Class (GV_APLCTAORIGEN)
+                        bh.STANDARD_ENTRY_CLASS_CODE AS ach_class,
+                        
+                        -- Origin Account (GN_CTAORIGEN)
+                        ed.DFI_ACCOUNT_NUMBER AS origin_account,
+                        
+                        -- Company ID (GN_EMPCTAORIGEN)
+                        bh.COMPANY_IDENTIFICATION AS company_id,
+                        
+                        -- Company Entry Description
+                        bh.COMPANY_ENTRY_DESCRIPTION AS company_entry_description,
+                        
+                        -- Receiver Routing/ABA (GN_ABABCORECIBIDOR)
+                        ed.RECEIVING_DFI_ID || ed.CHECK_DIGIT AS receiver_routing_aba,
+                        
+                        -- Receiver Account (GV_CTABCORECIBIDOR)
+                        ed.DFI_ACCOUNT_NUMBER AS receiver_account,
+                        
+                        -- Transaction Code (GN_PRODBCORECIBIDOR)
+                        ed.TRANSACTION_CODE AS transaction_code,
+                        
+                        -- Company Name (GV_CUENTAINSTITUCION)
+                        bh.COMPANY_NAME AS company_name,
+                        
+                        -- Receiver ID (GV_IDRECIBIDOR)
+                        ed.INDIVIDUAL_ID_NUMBER AS receiver_id,
+                        
+                        -- Receiver Name (GV_NOMBRERECIBIDOR)
+                        ed.INDIVIDUAL_NAME AS receiver_name,
+                        
+                        -- Reference (GV_REFERENCIA)
+                        fh.REFERENCE_CODE AS reference_code,
+                        
+                        -- Payment Description (GV_DESCPAGO)
+                        bh.COMPANY_ENTRY_DESCRIPTION AS payment_description,
+                        
+                        -- Amount (GN_MONTOOPERACION)
+                        ed.AMOUNT_DECIMAL AS amount,
+                        
+                        -- Additional fields for filtering/identification
+                        ed.ENTRY_DETAIL_ID,
+                        ed.FILE_ID,
+                        ed.BATCH_NUMBER,
+                        af.ORIGINAL_FILENAME
+                    FROM
+                        ACH_ENTRY_DETAIL ed
+                        INNER JOIN ACH_FILES af ON ed.FILE_ID = af.FILE_ID
+                        INNER JOIN ACH_BATCH_HEADER bh 
+                            ON ed.FILE_ID = bh.FILE_ID 
+                            AND ed.BATCH_NUMBER = bh.BATCH_NUMBER
+                        INNER JOIN ACH_FILE_HEADER fh ON ed.FILE_ID = fh.FILE_ID
+                    WHERE
+                        {where_clause}
+                    ORDER BY
+                        ed.FILE_ID, ed.BATCH_NUMBER, ed.ENTRY_DETAIL_ID
+                """
+                
+                # Add pagination if specified
+                if limit is not None:
+                    if offset is not None:
+                        query = f"""
+                            SELECT * FROM (
+                                SELECT a.*, ROWNUM rnum FROM (
+                                    {query}
+                                ) a WHERE ROWNUM <= :limit_offset
+                            ) WHERE rnum > :offset
+                        """
+                        params['limit_offset'] = offset + limit
+                        params['offset'] = offset
+                    else:
+                        query = f"""
+                            SELECT * FROM (
+                                {query}
+                            ) WHERE ROWNUM <= :limit
+                        """
+                        params['limit'] = limit
+                
+                cursor.execute(query, params)
+                
+                # Fetch all results
+                columns = [desc[0].lower() for desc in cursor.description]
+                results = []
+                
+                for row in cursor.fetchall():
+                    record = dict(zip(columns, row))
+                    results.append(record)
+                
+                logger.info(f"Retrieved {len(results)} ACH records for Core Post SP (approved files)")
+                return results
+                
+        except Exception as e:
+            logger.error(f"Failed to get ACH data for Core Post SP: {e}")
+            raise

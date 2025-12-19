@@ -146,3 +146,38 @@ class OracleAuthResponse(BaseModel):
     
     authenticated: bool = Field(..., description="True if email and password hash match, False otherwise")
     is_admin: bool = Field(False, description="True if user is admin, False otherwise (only set when authenticated=True)")
+
+
+class AchCorePostSpData(BaseModel):
+    """Data model for ACH Core Post Stored Procedure."""
+    
+    trace_sequence_number: Optional[int] = Field(None, description="Trace sequence number (GN_SECUENCIACONVENIO)")
+    client_id: Optional[str] = Field(None, description="Client ID (GN_CODIGOCLIENTE)")
+    origin_agency: Optional[str] = Field(None, description="Origin agency (GN_AGENCIACTAORIGEN)")
+    origin_sub_account: int = Field(0, description="Origin sub-account (GN_SUBCTAORIGEN)")
+    ach_class: Optional[str] = Field(None, description="ACH class/Standard Entry Class (GV_APLCTAORIGEN)")
+    origin_account: Optional[str] = Field(None, description="Origin account (GN_CTAORIGEN)")
+    company_id: Optional[str] = Field(None, description="Company ID (GN_EMPCTAORIGEN)")
+    company_entry_description: Optional[str] = Field(None, description="Company entry description")
+    receiver_routing_aba: Optional[str] = Field(None, description="Receiver routing/ABA (GN_ABABCORECIBIDOR)")
+    receiver_account: Optional[str] = Field(None, description="Receiver account (GV_CTABCORECIBIDOR)")
+    transaction_code: Optional[str] = Field(None, description="Transaction code (GN_PRODBCORECIBIDOR) - 22=Credit, 27=Debit")
+    company_name: Optional[str] = Field(None, description="Company name (GV_CUENTAINSTITUCION)")
+    receiver_id: Optional[str] = Field(None, description="Receiver ID (GV_IDRECIBIDOR)")
+    receiver_name: Optional[str] = Field(None, description="Receiver name (GV_NOMBRERECIBIDOR)")
+    reference_code: Optional[str] = Field(None, description="Reference code (GV_REFERENCIA)")
+    payment_description: Optional[str] = Field(None, description="Payment description (GV_DESCPAGO)")
+    amount: Optional[float] = Field(None, description="Amount (GN_MONTOOPERACION)")
+    entry_detail_id: int = Field(..., description="Entry detail ID")
+    file_id: int = Field(..., description="File ID")
+    batch_number: int = Field(..., description="Batch number")
+    original_filename: Optional[str] = Field(None, description="Original filename")
+
+
+class AchCorePostSpResponse(BaseModel):
+    """Response model for ACH Core Post Stored Procedure data."""
+    
+    success: bool = Field(..., description="Whether the query was successful")
+    data: List[AchCorePostSpData] = Field(..., description="List of ACH data records")
+    total_count: int = Field(..., description="Total number of records")
+    message: str = Field(..., description="Response message")

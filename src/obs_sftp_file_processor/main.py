@@ -14,7 +14,8 @@ from .models import (
     AddSftpAchFileRequest, AddSftpAchFileResponse,
     ProcessSftpFileRequest, ProcessSftpFileResponse, ProcessSftpFileData, ProcessSftpFileErrorDetails,
     ArchivedFileListResponse, ArchivedFileContentResponse, ArchivedFileInfo,
-    OracleAuthRequest, OracleAuthResponse
+    OracleAuthRequest, OracleAuthResponse,
+    AchCorePostSpData, AchCorePostSpResponse
 )
 from .sftp_service import SFTPService
 from .oracle_service import OracleService
@@ -1113,6 +1114,80 @@ async def update_ach_file_by_file_id(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to update ACH_FILES record: {str(e)}"
+        )
+
+
+@app.get("/api/oracle/get-ach-data-for-core-post-sp-approved", response_model=AchCorePostSpResponse)
+async def get_ach_data_for_core_post_sp_approved(
+    file_id: Optional[int] = None,
+    client_id: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: Optional[int] = None,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get ACH data for Core Post Stored Procedure (approved files only).
+    
+    Returns entry detail records with all related data needed for the stored procedure
+    BE_K_INTERFAZ_ACH.BE_P_PROCESA_PAGO. Only includes records from files with
+    PROCESSING_STATUS = 'APPROVED'.
+    
+    Query Parameters:
+        file_id: Optional filter by specific file_id
+        client_id: Optional filter by specific client_id
+        limit: Optional limit number of records (for pagination)
+        offset: Optional offset for pagination
+    
+    Returns:
+        List of ACH data records with all fields needed for the stored procedure
+    """
+    try:
+        with oracle_service:
+            results = oracle_service.get_ach_data_for_core_post_sp_approved(
+                file_id=file_id,
+                client_id=client_id,
+                limit=limit,
+                offset=offset
+            )
+            
+            # Convert to response models
+            data = []
+            for record in results:
+                data.append(AchCorePostSpData(
+                    trace_sequence_number=record.get('trace_sequence_number'),
+                    client_id=record.get('client_id'),
+                    origin_agency=record.get('origin_agency'),
+                    origin_sub_account=record.get('origin_sub_account', 0),
+                    ach_class=record.get('ach_class'),
+                    origin_account=record.get('origin_account'),
+                    company_id=record.get('company_id'),
+                    company_entry_description=record.get('company_entry_description'),
+                    receiver_routing_aba=record.get('receiver_routing_aba'),
+                    receiver_account=record.get('receiver_account'),
+                    transaction_code=record.get('transaction_code'),
+                    company_name=record.get('company_name'),
+                    receiver_id=record.get('receiver_id'),
+                    receiver_name=record.get('receiver_name'),
+                    reference_code=record.get('reference_code'),
+                    payment_description=record.get('payment_description'),
+                    amount=record.get('amount'),
+                    entry_detail_id=record.get('entry_detail_id'),
+                    file_id=record.get('file_id'),
+                    batch_number=record.get('batch_number'),
+                    original_filename=record.get('original_filename')
+                ))
+            
+            return AchCorePostSpResponse(
+                success=True,
+                data=data,
+                total_count=len(data),
+                message=f"Retrieved {len(data)} ACH records for Core Post SP"
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get ACH data for Core Post SP: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve ACH data: {str(e)}"
         )
 
 
