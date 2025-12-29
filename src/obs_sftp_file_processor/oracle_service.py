@@ -7,6 +7,7 @@ from datetime import datetime
 from loguru import logger
 from .oracle_config import OracleConfig
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse
+from .fi_holidays_models import FiHolidayCreate, FiHolidayUpdate, FiHolidayResponse
 from .ach_record_models import (
     AchFileHeaderCreate,
     AchBatchHeaderCreate,
@@ -1352,4 +1353,261 @@ class OracleService:
                 
         except Exception as e:
             logger.error(f"Failed to get ACH data for Core Post SP: {e}")
+            raise
+    
+    # ==================== FI_HOLIDAYS CRUD Operations ====================
+    
+    def create_fi_holiday(self, holiday: FiHolidayCreate) -> int:
+        """Create a new FI_HOLIDAYS record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                insert_sql = """
+                INSERT INTO FI_HOLIDAYS (
+                    HOLIDAY_DATE,
+                    HOLIDAY_NAME,
+                    IS_ACTIVE,
+                    CREATED_BY_USER,
+                    CREATED_DATE
+                ) VALUES (
+                    :holiday_date,
+                    :holiday_name,
+                    :is_active,
+                    :created_by_user,
+                    CURRENT_TIMESTAMP
+                ) RETURNING HOLIDAY_ID INTO :holiday_id
+                """
+                
+                holiday_id = cursor.var(int)
+                cursor.execute(insert_sql, {
+                    'holiday_date': holiday.holiday_date,
+                    'holiday_name': holiday.holiday_name,
+                    'is_active': holiday.is_active if holiday.is_active is not None else 1,
+                    'created_by_user': holiday.created_by_user,
+                    'holiday_id': holiday_id
+                })
+                
+                conn.commit()
+                generated_id = holiday_id.getvalue()[0]
+                
+                logger.info(f"Created FI_HOLIDAYS record with ID: {generated_id}")
+                return generated_id
+                
+        except Exception as e:
+            logger.error(f"Failed to create FI_HOLIDAYS record: {e}")
+            raise
+    
+    def get_fi_holiday(self, holiday_id: int) -> Optional[FiHolidayResponse]:
+        """Get a FI_HOLIDAYS record by ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                select_sql = """
+                SELECT 
+                    HOLIDAY_ID,
+                    HOLIDAY_DATE,
+                    HOLIDAY_NAME,
+                    IS_ACTIVE,
+                    CREATED_BY_USER,
+                    CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE
+                FROM FI_HOLIDAYS 
+                WHERE HOLIDAY_ID = :holiday_id
+                """
+                
+                cursor.execute(select_sql, {'holiday_id': holiday_id})
+                row = cursor.fetchone()
+                
+                if not row:
+                    return None
+                
+                return FiHolidayResponse(
+                    holiday_id=row[0],
+                    holiday_date=row[1],
+                    holiday_name=row[2],
+                    is_active=row[3],
+                    created_by_user=row[4],
+                    created_date=row[5],
+                    updated_by_user=row[6],
+                    updated_date=row[7]
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to get FI_HOLIDAYS record {holiday_id}: {e}")
+            raise
+    
+    def get_fi_holidays(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        is_active: Optional[int] = None,
+        year: Optional[int] = None
+    ) -> List[FiHolidayResponse]:
+        """Get list of FI_HOLIDAYS records with optional filtering."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build WHERE clause dynamically
+                where_conditions = []
+                params = {}
+                
+                if is_active is not None:
+                    where_conditions.append("IS_ACTIVE = :is_active")
+                    params['is_active'] = is_active
+                
+                if year is not None:
+                    where_conditions.append("EXTRACT(YEAR FROM HOLIDAY_DATE) = :year")
+                    params['year'] = year
+                
+                where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+                
+                select_sql = f"""
+                SELECT 
+                    HOLIDAY_ID,
+                    HOLIDAY_DATE,
+                    HOLIDAY_NAME,
+                    IS_ACTIVE,
+                    CREATED_BY_USER,
+                    CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE
+                FROM FI_HOLIDAYS 
+                WHERE {where_clause}
+                ORDER BY HOLIDAY_DATE
+                OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+                """
+                
+                params['offset'] = offset
+                params['limit'] = limit
+                
+                cursor.execute(select_sql, params)
+                rows = cursor.fetchall()
+                
+                holidays = []
+                for row in rows:
+                    holidays.append(FiHolidayResponse(
+                        holiday_id=row[0],
+                        holiday_date=row[1],
+                        holiday_name=row[2],
+                        is_active=row[3],
+                        created_by_user=row[4],
+                        created_date=row[5],
+                        updated_by_user=row[6],
+                        updated_date=row[7]
+                    ))
+                
+                logger.info(f"Retrieved {len(holidays)} FI_HOLIDAYS records")
+                return holidays
+                
+        except Exception as e:
+            logger.error(f"Failed to get FI_HOLIDAYS records: {e}")
+            raise
+    
+    def get_fi_holidays_count(
+        self,
+        is_active: Optional[int] = None,
+        year: Optional[int] = None
+    ) -> int:
+        """Get total count of FI_HOLIDAYS records with optional filtering."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build WHERE clause dynamically
+                where_conditions = []
+                params = {}
+                
+                if is_active is not None:
+                    where_conditions.append("IS_ACTIVE = :is_active")
+                    params['is_active'] = is_active
+                
+                if year is not None:
+                    where_conditions.append("EXTRACT(YEAR FROM HOLIDAY_DATE) = :year")
+                    params['year'] = year
+                
+                where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+                
+                count_sql = f"""
+                SELECT COUNT(*) 
+                FROM FI_HOLIDAYS 
+                WHERE {where_clause}
+                """
+                
+                cursor.execute(count_sql, params)
+                count = cursor.fetchone()[0]
+                
+                return count
+                
+        except Exception as e:
+            logger.error(f"Failed to get FI_HOLIDAYS count: {e}")
+            raise
+    
+    def update_fi_holiday(self, holiday_id: int, holiday: FiHolidayUpdate) -> bool:
+        """Update a FI_HOLIDAYS record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build update fields dynamically
+                update_fields = []
+                params = {'holiday_id': holiday_id}
+                
+                if holiday.holiday_date is not None:
+                    update_fields.append("HOLIDAY_DATE = :holiday_date")
+                    params['holiday_date'] = holiday.holiday_date
+                
+                if holiday.holiday_name is not None:
+                    update_fields.append("HOLIDAY_NAME = :holiday_name")
+                    params['holiday_name'] = holiday.holiday_name
+                
+                if holiday.is_active is not None:
+                    update_fields.append("IS_ACTIVE = :is_active")
+                    params['is_active'] = holiday.is_active
+                
+                if holiday.updated_by_user is not None:
+                    update_fields.append("UPDATED_BY_USER = :updated_by_user")
+                    params['updated_by_user'] = holiday.updated_by_user
+                
+                if not update_fields:
+                    return False  # No fields to update
+                
+                update_fields.append("UPDATED_DATE = CURRENT_TIMESTAMP")
+                
+                update_sql = f"""
+                UPDATE FI_HOLIDAYS 
+                SET {', '.join(update_fields)}
+                WHERE HOLIDAY_ID = :holiday_id
+                """
+                
+                cursor.execute(update_sql, params)
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Updated FI_HOLIDAYS record {holiday_id}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to update FI_HOLIDAYS record {holiday_id}: {e}")
+            raise
+    
+    def delete_fi_holiday(self, holiday_id: int) -> bool:
+        """Delete a FI_HOLIDAYS record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                delete_sql = "DELETE FROM FI_HOLIDAYS WHERE HOLIDAY_ID = :holiday_id"
+                cursor.execute(delete_sql, {'holiday_id': holiday_id})
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Deleted FI_HOLIDAYS record {holiday_id}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to delete FI_HOLIDAYS record {holiday_id}: {e}")
             raise

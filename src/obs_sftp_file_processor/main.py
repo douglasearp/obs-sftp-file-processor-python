@@ -20,6 +20,7 @@ from .models import (
 from .sftp_service import SFTPService
 from .oracle_service import OracleService
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest, AchClientResponse, AchClientListResponse
+from .fi_holidays_models import FiHolidayCreate, FiHolidayUpdate, FiHolidayResponse, FiHolidayListResponse
 from .ach_file_lines_service import AchFileLinesService
 from .ach_file_blobs_service import AchFileBlobsService
 from .ach_file_blobs_models import AchFileBlobCreate, AchFileBlobResponse
@@ -1216,6 +1217,164 @@ async def delete_ach_file(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete ACH_FILES record: {str(e)}"
+        )
+
+
+# ==================== FI_HOLIDAYS Endpoints ====================
+
+@app.get("/oracle/fi-holidays", response_model=FiHolidayListResponse)
+async def get_fi_holidays(
+    limit: int = 100,
+    offset: int = 0,
+    is_active: Optional[int] = None,
+    year: Optional[int] = None,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get list of FI_HOLIDAYS records.
+    
+    Args:
+        limit: Maximum number of records to return (default: 100)
+        offset: Number of records to skip (default: 0)
+        is_active: Filter by active status (1=active, 0=inactive, None=all)
+        year: Filter by year (e.g., 2024)
+    """
+    try:
+        with oracle_service:
+            holidays = oracle_service.get_fi_holidays(
+                limit=limit,
+                offset=offset,
+                is_active=is_active,
+                year=year
+            )
+            total_count = oracle_service.get_fi_holidays_count(
+                is_active=is_active,
+                year=year
+            )
+            
+            return FiHolidayListResponse(
+                holidays=holidays,
+                total_count=total_count
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get FI_HOLIDAYS: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get FI_HOLIDAYS: {str(e)}"
+        )
+
+
+@app.get("/oracle/fi-holidays/{holiday_id}", response_model=FiHolidayResponse)
+async def get_fi_holiday(
+    holiday_id: int,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get a specific FI_HOLIDAYS record by ID."""
+    try:
+        with oracle_service:
+            holiday = oracle_service.get_fi_holiday(holiday_id)
+            
+            if not holiday:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"FI_HOLIDAYS record not found: {holiday_id}"
+                )
+            
+            return holiday
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get FI_HOLIDAYS record {holiday_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get FI_HOLIDAYS record: {str(e)}"
+        )
+
+
+@app.post("/oracle/fi-holidays", response_model=FiHolidayResponse)
+async def create_fi_holiday(
+    holiday: FiHolidayCreate,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Create a new FI_HOLIDAYS record."""
+    try:
+        with oracle_service:
+            holiday_id = oracle_service.create_fi_holiday(holiday)
+            
+            # Get the created record
+            created_holiday = oracle_service.get_fi_holiday(holiday_id)
+            return created_holiday
+            
+    except Exception as e:
+        logger.error(f"Failed to create FI_HOLIDAYS record: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create FI_HOLIDAYS record: {str(e)}"
+        )
+
+
+@app.put("/oracle/fi-holidays/{holiday_id}", response_model=FiHolidayResponse)
+async def update_fi_holiday(
+    holiday_id: int,
+    holiday: FiHolidayUpdate,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Update a FI_HOLIDAYS record.
+    
+    Args:
+        holiday_id: The ID of the FI_HOLIDAYS record to update
+        holiday: The update data (holiday_date, holiday_name, is_active, etc.)
+    """
+    try:
+        with oracle_service:
+            success = oracle_service.update_fi_holiday(holiday_id, holiday)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"FI_HOLIDAYS record not found: {holiday_id}"
+                )
+            
+            # Get the updated record
+            updated_holiday = oracle_service.get_fi_holiday(holiday_id)
+            return updated_holiday
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update FI_HOLIDAYS record {holiday_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update FI_HOLIDAYS record: {str(e)}"
+        )
+
+
+@app.delete("/oracle/fi-holidays/{holiday_id}")
+async def delete_fi_holiday(
+    holiday_id: int,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Delete a FI_HOLIDAYS record."""
+    try:
+        with oracle_service:
+            success = oracle_service.delete_fi_holiday(holiday_id)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"FI_HOLIDAYS record not found: {holiday_id}"
+                )
+            
+            return {"message": f"FI_HOLIDAYS record {holiday_id} deleted successfully"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete FI_HOLIDAYS record {holiday_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete FI_HOLIDAYS record: {str(e)}"
         )
 
 
