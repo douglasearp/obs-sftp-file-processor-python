@@ -21,6 +21,7 @@ from .sftp_service import SFTPService
 from .oracle_service import OracleService
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest, AchClientResponse, AchClientListResponse
 from .fi_holidays_models import FiHolidayCreate, FiHolidayUpdate, FiHolidayResponse, FiHolidayListResponse
+from .ach_account_swaps_models import AchAccountSwapCreate, AchAccountSwapUpdate, AchAccountSwapResponse, AchAccountSwapListResponse, SwapLookupResponse
 from .ach_file_lines_service import AchFileLinesService
 from .ach_file_blobs_service import AchFileBlobsService
 from .ach_file_blobs_models import AchFileBlobCreate, AchFileBlobResponse
@@ -1375,6 +1376,417 @@ async def delete_fi_holiday(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete FI_HOLIDAYS record: {str(e)}"
+        )
+
+
+# ==================== ACH_ACCOUNT_NUMBER_SWAPS Endpoints ====================
+
+@app.get("/oracle/ach-account-swaps", response_model=AchAccountSwapListResponse)
+async def get_ach_account_swaps(
+    limit: int = 100,
+    offset: int = 0,
+    original_dfi_account_number: Optional[str] = None,
+    swap_account_number: Optional[str] = None,
+    swap_memo: Optional[str] = None,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get list of ACH_ACCOUNT_NUMBER_SWAPS records.
+    
+    Args:
+        limit: Maximum number of records to return (default: 100)
+        offset: Number of records to skip (default: 0)
+        original_dfi_account_number: Filter by original account number
+        swap_account_number: Filter by swap account number
+        swap_memo: Filter by memo (partial match, case-insensitive)
+    """
+    try:
+        with oracle_service:
+            swaps = oracle_service.get_ach_account_swaps(
+                limit=limit,
+                offset=offset,
+                original_dfi_account_number=original_dfi_account_number,
+                swap_account_number=swap_account_number,
+                swap_memo=swap_memo
+            )
+            total_count = oracle_service.get_ach_account_swaps_count(
+                original_dfi_account_number=original_dfi_account_number,
+                swap_account_number=swap_account_number,
+                swap_memo=swap_memo
+            )
+            
+            return AchAccountSwapListResponse(
+                swaps=swaps,
+                total_count=total_count
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get ACH_ACCOUNT_NUMBER_SWAPS: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get ACH_ACCOUNT_NUMBER_SWAPS: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-account-swaps/{swap_id}", response_model=AchAccountSwapResponse)
+async def get_ach_account_swap(
+    swap_id: int,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get a specific ACH_ACCOUNT_NUMBER_SWAPS record by SWAP_ID."""
+    try:
+        with oracle_service:
+            swap = oracle_service.get_ach_account_swap(swap_id)
+            
+            if not swap:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ACH_ACCOUNT_NUMBER_SWAPS record not found: {swap_id}"
+                )
+            
+            return swap
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get ACH_ACCOUNT_NUMBER_SWAPS record: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-account-swaps/by-original/{original_dfi_account_number}", response_model=SwapLookupResponse)
+async def get_swap_by_original_account(
+    original_dfi_account_number: str,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get swap information by ORIGINAL_DFI_ACCOUNT_NUMBER (returns first match).
+    
+    Returns SWAP_ACCOUNT_NUMBER and SWAP_MEMO for the given original account number.
+    """
+    try:
+        with oracle_service:
+            swap = oracle_service.get_swap_by_original_account(original_dfi_account_number)
+            
+            if not swap:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Swap not found for ORIGINAL_DFI_ACCOUNT_NUMBER: {original_dfi_account_number}"
+                )
+            
+            return swap
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get swap by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get swap: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-account-swaps/by-swap-account/{swap_account_number}", response_model=AchAccountSwapListResponse)
+async def get_swaps_by_swap_account(
+    swap_account_number: str,
+    limit: int = 100,
+    offset: int = 0,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get all swaps by SWAP_ACCOUNT_NUMBER."""
+    try:
+        with oracle_service:
+            swaps = oracle_service.get_ach_account_swaps(
+                limit=limit,
+                offset=offset,
+                swap_account_number=swap_account_number
+            )
+            total_count = oracle_service.get_ach_account_swaps_count(
+                swap_account_number=swap_account_number
+            )
+            
+            return AchAccountSwapListResponse(
+                swaps=swaps,
+                total_count=total_count
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get swaps by SWAP_ACCOUNT_NUMBER: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get swaps: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-account-swaps/by-memo/{swap_memo}", response_model=AchAccountSwapListResponse)
+async def get_swaps_by_memo(
+    swap_memo: str,
+    limit: int = 100,
+    offset: int = 0,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get all swaps by SWAP_MEMO (partial match, case-insensitive)."""
+    try:
+        with oracle_service:
+            swaps = oracle_service.get_ach_account_swaps(
+                limit=limit,
+                offset=offset,
+                swap_memo=swap_memo
+            )
+            total_count = oracle_service.get_ach_account_swaps_count(
+                swap_memo=swap_memo
+            )
+            
+            return AchAccountSwapListResponse(
+                swaps=swaps,
+                total_count=total_count
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get swaps by SWAP_MEMO: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get swaps: {str(e)}"
+        )
+
+
+@app.get("/oracle/ach-account-swaps/by-original/{original_dfi_account_number}/all", response_model=AchAccountSwapListResponse)
+async def get_all_swaps_by_original_account(
+    original_dfi_account_number: str,
+    limit: int = 100,
+    offset: int = 0,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get all swaps by ORIGINAL_DFI_ACCOUNT_NUMBER."""
+    try:
+        with oracle_service:
+            swaps = oracle_service.get_ach_account_swaps(
+                limit=limit,
+                offset=offset,
+                original_dfi_account_number=original_dfi_account_number
+            )
+            total_count = oracle_service.get_ach_account_swaps_count(
+                original_dfi_account_number=original_dfi_account_number
+            )
+            
+            return AchAccountSwapListResponse(
+                swaps=swaps,
+                total_count=total_count
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get swaps by ORIGINAL_DFI_ACCOUNT_NUMBER: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get swaps: {str(e)}"
+        )
+
+
+@app.post("/oracle/ach-account-swaps", response_model=AchAccountSwapResponse)
+async def create_ach_account_swap(
+    swap: AchAccountSwapCreate,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Create a new ACH_ACCOUNT_NUMBER_SWAPS record."""
+    try:
+        with oracle_service:
+            swap_id = oracle_service.create_ach_account_swap(swap)
+            
+            # Get the created record
+            created_swap = oracle_service.get_ach_account_swap(swap_id)
+            return created_swap
+            
+    except Exception as e:
+        logger.error(f"Failed to create ACH_ACCOUNT_NUMBER_SWAPS record: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create ACH_ACCOUNT_NUMBER_SWAPS record: {str(e)}"
+        )
+
+
+@app.put("/oracle/ach-account-swaps/{swap_id}", response_model=AchAccountSwapResponse)
+async def update_ach_account_swap(
+    swap_id: int,
+    swap: AchAccountSwapUpdate,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Update a ACH_ACCOUNT_NUMBER_SWAPS record by SWAP_ID.
+    
+    Args:
+        swap_id: The ID of the swap record to update
+        swap: The update data
+    """
+    try:
+        with oracle_service:
+            success = oracle_service.update_ach_account_swap(swap_id, swap)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ACH_ACCOUNT_NUMBER_SWAPS record not found: {swap_id}"
+                )
+            
+            # Get the updated record
+            updated_swap = oracle_service.get_ach_account_swap(swap_id)
+            return updated_swap
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update ACH_ACCOUNT_NUMBER_SWAPS record: {str(e)}"
+        )
+
+
+@app.put("/oracle/ach-account-swaps/by-original/{original_dfi_account_number}", response_model=dict)
+async def update_swap_by_original_account(
+    original_dfi_account_number: str,
+    swap_account_number: Optional[str] = None,
+    swap_memo: Optional[str] = None,
+    updated_by_user: Optional[str] = None,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Update SWAP_ACCOUNT_NUMBER and SWAP_MEMO by ORIGINAL_DFI_ACCOUNT_NUMBER.
+    
+    Query Parameters:
+        swap_account_number: New swap account number (optional)
+        swap_memo: New swap memo (required)
+        updated_by_user: User who updated the record (optional)
+    """
+    try:
+        with oracle_service:
+            if swap_memo is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="swap_memo is required"
+                )
+            
+            success = oracle_service.update_swap_by_original_account(
+                original_dfi_account_number=original_dfi_account_number,
+                swap_account_number=swap_account_number,
+                swap_memo=swap_memo,
+                updated_by_user=updated_by_user
+            )
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Swap not found for ORIGINAL_DFI_ACCOUNT_NUMBER: {original_dfi_account_number}"
+                )
+            
+            return {
+                "message": f"Successfully updated swap for ORIGINAL_DFI_ACCOUNT_NUMBER: {original_dfi_account_number}",
+                "rows_affected": 1
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update swap by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update swap: {str(e)}"
+        )
+
+
+@app.delete("/oracle/ach-account-swaps/{swap_id}")
+async def delete_ach_account_swap(
+    swap_id: int,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Delete a ACH_ACCOUNT_NUMBER_SWAPS record by SWAP_ID."""
+    try:
+        with oracle_service:
+            success = oracle_service.delete_ach_account_swap(swap_id)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ACH_ACCOUNT_NUMBER_SWAPS record not found: {swap_id}"
+                )
+            
+            return {"message": f"ACH_ACCOUNT_NUMBER_SWAPS record {swap_id} deleted successfully"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete ACH_ACCOUNT_NUMBER_SWAPS record: {str(e)}"
+        )
+
+
+@app.delete("/oracle/ach-account-swaps/by-original/{original_dfi_account_number}")
+async def delete_swap_by_original_account(
+    original_dfi_account_number: str,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Delete swap(s) by ORIGINAL_DFI_ACCOUNT_NUMBER."""
+    try:
+        with oracle_service:
+            success = oracle_service.delete_swap_by_original_account(original_dfi_account_number)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Swap not found for ORIGINAL_DFI_ACCOUNT_NUMBER: {original_dfi_account_number}"
+                )
+            
+            return {"message": f"Swap(s) deleted successfully for ORIGINAL_DFI_ACCOUNT_NUMBER: {original_dfi_account_number}"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete swap by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete swap: {str(e)}"
+        )
+
+
+@app.put("/oracle/ach-entry-detail/{entry_detail_id}/apply-swap/{original_dfi_account_number}", response_model=dict)
+async def apply_swap_to_entry_detail(
+    entry_detail_id: int,
+    original_dfi_account_number: str,
+    updated_by_user: Optional[str] = None,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Update ACH_ENTRY_DETAIL using swap by ORIGINAL_DFI_ACCOUNT_NUMBER and ENTRY_DETAIL_ID.
+    
+    This endpoint:
+    1. Looks up the swap for the given ORIGINAL_DFI_ACCOUNT_NUMBER
+    2. Updates the ACH_ENTRY_DETAIL record's DFI_ACCOUNT_NUMBER with the SWAP_ACCOUNT_NUMBER
+    """
+    try:
+        with oracle_service:
+            success = oracle_service.update_ach_entry_detail_with_swap(
+                entry_detail_id=entry_detail_id,
+                original_dfi_account_number=original_dfi_account_number,
+                updated_by_user=updated_by_user
+            )
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Failed to apply swap: Either ENTRY_DETAIL_ID {entry_detail_id} not found or no swap exists for ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}"
+                )
+            
+            return {
+                "message": f"Successfully applied swap to ENTRY_DETAIL_ID {entry_detail_id}",
+                "entry_detail_id": entry_detail_id,
+                "original_dfi_account_number": original_dfi_account_number
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to apply swap to ENTRY_DETAIL_ID {entry_detail_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to apply swap: {str(e)}"
         )
 
 

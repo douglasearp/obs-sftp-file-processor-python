@@ -8,6 +8,7 @@ from loguru import logger
 from .oracle_config import OracleConfig
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse
 from .fi_holidays_models import FiHolidayCreate, FiHolidayUpdate, FiHolidayResponse
+from .ach_account_swaps_models import AchAccountSwapCreate, AchAccountSwapUpdate, AchAccountSwapResponse, SwapLookupResponse
 from .ach_record_models import (
     AchFileHeaderCreate,
     AchBatchHeaderCreate,
@@ -1363,17 +1364,15 @@ class OracleService:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                insert_sql = """
-                INSERT INTO FI_HOLIDAYS (
+                insert_sql = f"""
+                INSERT INTO {self.config.db_schema}.FI_HOLIDAYS (
                     HOLIDAY_DATE,
                     HOLIDAY_NAME,
-                    IS_ACTIVE,
                     CREATED_BY_USER,
                     CREATED_DATE
                 ) VALUES (
                     :holiday_date,
                     :holiday_name,
-                    :is_active,
                     :created_by_user,
                     CURRENT_TIMESTAMP
                 ) RETURNING HOLIDAY_ID INTO :holiday_id
@@ -1383,7 +1382,6 @@ class OracleService:
                 cursor.execute(insert_sql, {
                     'holiday_date': holiday.holiday_date,
                     'holiday_name': holiday.holiday_name,
-                    'is_active': holiday.is_active if holiday.is_active is not None else 1,
                     'created_by_user': holiday.created_by_user,
                     'holiday_id': holiday_id
                 })
@@ -1404,17 +1402,16 @@ class OracleService:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                select_sql = """
+                select_sql = f"""
                 SELECT 
                     HOLIDAY_ID,
                     HOLIDAY_DATE,
                     HOLIDAY_NAME,
-                    IS_ACTIVE,
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
                     UPDATED_DATE
-                FROM FI_HOLIDAYS 
+                FROM {self.config.db_schema}.FI_HOLIDAYS 
                 WHERE HOLIDAY_ID = :holiday_id
                 """
                 
@@ -1428,11 +1425,11 @@ class OracleService:
                     holiday_id=row[0],
                     holiday_date=row[1],
                     holiday_name=row[2],
-                    is_active=row[3],
-                    created_by_user=row[4],
-                    created_date=row[5],
-                    updated_by_user=row[6],
-                    updated_date=row[7]
+                    is_active=None,  # Column doesn't exist in table
+                    created_by_user=row[3],
+                    created_date=row[4],
+                    updated_by_user=row[5],
+                    updated_date=row[6]
                 )
                 
         except Exception as e:
@@ -1455,9 +1452,10 @@ class OracleService:
                 where_conditions = []
                 params = {}
                 
-                if is_active is not None:
-                    where_conditions.append("IS_ACTIVE = :is_active")
-                    params['is_active'] = is_active
+                # Note: IS_ACTIVE column doesn't exist in FI_HOLIDAYS table, so we skip that filter
+                # if is_active is not None:
+                #     where_conditions.append("IS_ACTIVE = :is_active")
+                #     params['is_active'] = is_active
                 
                 if year is not None:
                     where_conditions.append("EXTRACT(YEAR FROM HOLIDAY_DATE) = :year")
@@ -1470,12 +1468,11 @@ class OracleService:
                     HOLIDAY_ID,
                     HOLIDAY_DATE,
                     HOLIDAY_NAME,
-                    IS_ACTIVE,
                     CREATED_BY_USER,
                     CREATED_DATE,
                     UPDATED_BY_USER,
                     UPDATED_DATE
-                FROM FI_HOLIDAYS 
+                FROM {self.config.db_schema}.FI_HOLIDAYS 
                 WHERE {where_clause}
                 ORDER BY HOLIDAY_DATE
                 OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
@@ -1493,11 +1490,11 @@ class OracleService:
                         holiday_id=row[0],
                         holiday_date=row[1],
                         holiday_name=row[2],
-                        is_active=row[3],
-                        created_by_user=row[4],
-                        created_date=row[5],
-                        updated_by_user=row[6],
-                        updated_date=row[7]
+                        is_active=None,  # Column doesn't exist in table
+                        created_by_user=row[3],
+                        created_date=row[4],
+                        updated_by_user=row[5],
+                        updated_date=row[6]
                     ))
                 
                 logger.info(f"Retrieved {len(holidays)} FI_HOLIDAYS records")
@@ -1521,9 +1518,10 @@ class OracleService:
                 where_conditions = []
                 params = {}
                 
-                if is_active is not None:
-                    where_conditions.append("IS_ACTIVE = :is_active")
-                    params['is_active'] = is_active
+                # Note: IS_ACTIVE column doesn't exist in FI_HOLIDAYS table, so we skip that filter
+                # if is_active is not None:
+                #     where_conditions.append("IS_ACTIVE = :is_active")
+                #     params['is_active'] = is_active
                 
                 if year is not None:
                     where_conditions.append("EXTRACT(YEAR FROM HOLIDAY_DATE) = :year")
@@ -1533,7 +1531,7 @@ class OracleService:
                 
                 count_sql = f"""
                 SELECT COUNT(*) 
-                FROM FI_HOLIDAYS 
+                FROM {self.config.db_schema}.FI_HOLIDAYS 
                 WHERE {where_clause}
                 """
                 
@@ -1564,9 +1562,10 @@ class OracleService:
                     update_fields.append("HOLIDAY_NAME = :holiday_name")
                     params['holiday_name'] = holiday.holiday_name
                 
-                if holiday.is_active is not None:
-                    update_fields.append("IS_ACTIVE = :is_active")
-                    params['is_active'] = holiday.is_active
+                # Note: IS_ACTIVE column doesn't exist in FI_HOLIDAYS table
+                # if holiday.is_active is not None:
+                #     update_fields.append("IS_ACTIVE = :is_active")
+                #     params['is_active'] = holiday.is_active
                 
                 if holiday.updated_by_user is not None:
                     update_fields.append("UPDATED_BY_USER = :updated_by_user")
@@ -1578,7 +1577,7 @@ class OracleService:
                 update_fields.append("UPDATED_DATE = CURRENT_TIMESTAMP")
                 
                 update_sql = f"""
-                UPDATE FI_HOLIDAYS 
+                UPDATE {self.config.db_schema}.FI_HOLIDAYS 
                 SET {', '.join(update_fields)}
                 WHERE HOLIDAY_ID = :holiday_id
                 """
@@ -1600,7 +1599,7 @@ class OracleService:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                delete_sql = "DELETE FROM FI_HOLIDAYS WHERE HOLIDAY_ID = :holiday_id"
+                delete_sql = f"DELETE FROM {self.config.db_schema}.FI_HOLIDAYS WHERE HOLIDAY_ID = :holiday_id"
                 cursor.execute(delete_sql, {'holiday_id': holiday_id})
                 conn.commit()
                 
@@ -1610,4 +1609,415 @@ class OracleService:
                 
         except Exception as e:
             logger.error(f"Failed to delete FI_HOLIDAYS record {holiday_id}: {e}")
+            raise
+    
+    # ==================== ACH_ACCOUNT_NUMBER_SWAPS CRUD Operations ====================
+    
+    def create_ach_account_swap(self, swap: AchAccountSwapCreate) -> int:
+        """Create a new ACH_ACCOUNT_NUMBER_SWAPS record."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                insert_sql = f"""
+                INSERT INTO {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS (
+                    ORIGINAL_DFI_ACCOUNT_NUMBER,
+                    SWAP_ACCOUNT_NUMBER,
+                    SWAP_MEMO,
+                    CREATED_BY_USER,
+                    CREATED_DATE
+                ) VALUES (
+                    :original_dfi_account_number,
+                    :swap_account_number,
+                    :swap_memo,
+                    :created_by_user,
+                    CURRENT_TIMESTAMP
+                ) RETURNING SWAP_ID INTO :swap_id
+                """
+                
+                swap_id = cursor.var(int)
+                cursor.execute(insert_sql, {
+                    'original_dfi_account_number': swap.original_dfi_account_number,
+                    'swap_account_number': swap.swap_account_number,
+                    'swap_memo': swap.swap_memo,
+                    'created_by_user': swap.created_by_user,
+                    'swap_id': swap_id
+                })
+                
+                conn.commit()
+                generated_id = swap_id.getvalue()[0]
+                
+                logger.info(f"Created ACH_ACCOUNT_NUMBER_SWAPS record with ID: {generated_id}")
+                return generated_id
+                
+        except Exception as e:
+            logger.error(f"Failed to create ACH_ACCOUNT_NUMBER_SWAPS record: {e}")
+            raise
+    
+    def get_ach_account_swap(self, swap_id: int) -> Optional[AchAccountSwapResponse]:
+        """Get a ACH_ACCOUNT_NUMBER_SWAPS record by SWAP_ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                select_sql = f"""
+                SELECT 
+                    SWAP_ID,
+                    ORIGINAL_DFI_ACCOUNT_NUMBER,
+                    SWAP_ACCOUNT_NUMBER,
+                    SWAP_MEMO,
+                    CREATED_BY_USER,
+                    CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE
+                FROM {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS 
+                WHERE SWAP_ID = :swap_id
+                """
+                
+                cursor.execute(select_sql, {'swap_id': swap_id})
+                row = cursor.fetchone()
+                
+                if not row:
+                    return None
+                
+                return AchAccountSwapResponse(
+                    swap_id=row[0],
+                    original_dfi_account_number=row[1],
+                    swap_account_number=row[2],
+                    swap_memo=row[3],
+                    created_by_user=row[4],
+                    created_date=row[5],
+                    updated_by_user=row[6],
+                    updated_date=row[7]
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to get ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}: {e}")
+            raise
+    
+    def get_ach_account_swaps(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        original_dfi_account_number: Optional[str] = None,
+        swap_account_number: Optional[str] = None,
+        swap_memo: Optional[str] = None
+    ) -> List[AchAccountSwapResponse]:
+        """Get list of ACH_ACCOUNT_NUMBER_SWAPS records with optional filtering."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build WHERE clause dynamically
+                where_conditions = []
+                params = {}
+                
+                if original_dfi_account_number is not None:
+                    where_conditions.append("ORIGINAL_DFI_ACCOUNT_NUMBER = :original_dfi_account_number")
+                    params['original_dfi_account_number'] = original_dfi_account_number
+                
+                if swap_account_number is not None:
+                    where_conditions.append("SWAP_ACCOUNT_NUMBER = :swap_account_number")
+                    params['swap_account_number'] = swap_account_number
+                
+                if swap_memo is not None:
+                    where_conditions.append("UPPER(SWAP_MEMO) LIKE UPPER(:swap_memo)")
+                    params['swap_memo'] = f'%{swap_memo}%'
+                
+                where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+                
+                select_sql = f"""
+                SELECT 
+                    SWAP_ID,
+                    ORIGINAL_DFI_ACCOUNT_NUMBER,
+                    SWAP_ACCOUNT_NUMBER,
+                    SWAP_MEMO,
+                    CREATED_BY_USER,
+                    CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE
+                FROM {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS 
+                WHERE {where_clause}
+                ORDER BY CREATED_DATE DESC
+                OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+                """
+                
+                params['offset'] = offset
+                params['limit'] = limit
+                
+                cursor.execute(select_sql, params)
+                rows = cursor.fetchall()
+                
+                swaps = []
+                for row in rows:
+                    swaps.append(AchAccountSwapResponse(
+                        swap_id=row[0],
+                        original_dfi_account_number=row[1],
+                        swap_account_number=row[2],
+                        swap_memo=row[3],
+                        created_by_user=row[4],
+                        created_date=row[5],
+                        updated_by_user=row[6],
+                        updated_date=row[7]
+                    ))
+                
+                logger.info(f"Retrieved {len(swaps)} ACH_ACCOUNT_NUMBER_SWAPS records")
+                return swaps
+                
+        except Exception as e:
+            logger.error(f"Failed to get ACH_ACCOUNT_NUMBER_SWAPS records: {e}")
+            raise
+    
+    def get_ach_account_swaps_count(
+        self,
+        original_dfi_account_number: Optional[str] = None,
+        swap_account_number: Optional[str] = None,
+        swap_memo: Optional[str] = None
+    ) -> int:
+        """Get total count of ACH_ACCOUNT_NUMBER_SWAPS records with optional filtering."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build WHERE clause dynamically
+                where_conditions = []
+                params = {}
+                
+                if original_dfi_account_number is not None:
+                    where_conditions.append("ORIGINAL_DFI_ACCOUNT_NUMBER = :original_dfi_account_number")
+                    params['original_dfi_account_number'] = original_dfi_account_number
+                
+                if swap_account_number is not None:
+                    where_conditions.append("SWAP_ACCOUNT_NUMBER = :swap_account_number")
+                    params['swap_account_number'] = swap_account_number
+                
+                if swap_memo is not None:
+                    where_conditions.append("UPPER(SWAP_MEMO) LIKE UPPER(:swap_memo)")
+                    params['swap_memo'] = f'%{swap_memo}%'
+                
+                where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+                
+                count_sql = f"""
+                SELECT COUNT(*) 
+                FROM {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS 
+                WHERE {where_clause}
+                """
+                
+                cursor.execute(count_sql, params)
+                count = cursor.fetchone()[0]
+                
+                return count
+                
+        except Exception as e:
+            logger.error(f"Failed to get ACH_ACCOUNT_NUMBER_SWAPS count: {e}")
+            raise
+    
+    def get_swap_by_original_account(self, original_dfi_account_number: str) -> Optional[SwapLookupResponse]:
+        """Get swap information by ORIGINAL_DFI_ACCOUNT_NUMBER (returns first match)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                select_sql = f"""
+                SELECT 
+                    SWAP_ID,
+                    ORIGINAL_DFI_ACCOUNT_NUMBER,
+                    SWAP_ACCOUNT_NUMBER,
+                    SWAP_MEMO
+                FROM {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS 
+                WHERE ORIGINAL_DFI_ACCOUNT_NUMBER = :original_dfi_account_number
+                ORDER BY CREATED_DATE DESC
+                FETCH FIRST 1 ROWS ONLY
+                """
+                
+                cursor.execute(select_sql, {'original_dfi_account_number': original_dfi_account_number})
+                row = cursor.fetchone()
+                
+                if not row:
+                    return None
+                
+                return SwapLookupResponse(
+                    swap_id=row[0],
+                    original_dfi_account_number=row[1],
+                    swap_account_number=row[2],
+                    swap_memo=row[3]
+                )
+                
+        except Exception as e:
+            logger.error(f"Failed to get swap by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}: {e}")
+            raise
+    
+    def update_ach_account_swap(self, swap_id: int, swap: AchAccountSwapUpdate) -> bool:
+        """Update a ACH_ACCOUNT_NUMBER_SWAPS record by SWAP_ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build update fields dynamically
+                update_fields = []
+                params = {'swap_id': swap_id}
+                
+                if swap.original_dfi_account_number is not None:
+                    update_fields.append("ORIGINAL_DFI_ACCOUNT_NUMBER = :original_dfi_account_number")
+                    params['original_dfi_account_number'] = swap.original_dfi_account_number
+                
+                if swap.swap_account_number is not None:
+                    update_fields.append("SWAP_ACCOUNT_NUMBER = :swap_account_number")
+                    params['swap_account_number'] = swap.swap_account_number
+                
+                if swap.swap_memo is not None:
+                    update_fields.append("SWAP_MEMO = :swap_memo")
+                    params['swap_memo'] = swap.swap_memo
+                
+                if swap.updated_by_user is not None:
+                    update_fields.append("UPDATED_BY_USER = :updated_by_user")
+                    params['updated_by_user'] = swap.updated_by_user
+                
+                if not update_fields:
+                    return False  # No fields to update
+                
+                update_fields.append("UPDATED_DATE = CURRENT_TIMESTAMP")
+                
+                update_sql = f"""
+                UPDATE {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS 
+                SET {', '.join(update_fields)}
+                WHERE SWAP_ID = :swap_id
+                """
+                
+                cursor.execute(update_sql, params)
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Updated ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to update ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}: {e}")
+            raise
+    
+    def update_swap_by_original_account(
+        self,
+        original_dfi_account_number: str,
+        swap_account_number: Optional[str],
+        swap_memo: str,
+        updated_by_user: Optional[str] = None
+    ) -> bool:
+        """Update SWAP_ACCOUNT_NUMBER and SWAP_MEMO by ORIGINAL_DFI_ACCOUNT_NUMBER."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                update_fields = []
+                params = {'original_dfi_account_number': original_dfi_account_number}
+                
+                if swap_account_number is not None:
+                    update_fields.append("SWAP_ACCOUNT_NUMBER = :swap_account_number")
+                    params['swap_account_number'] = swap_account_number
+                
+                update_fields.append("SWAP_MEMO = :swap_memo")
+                params['swap_memo'] = swap_memo
+                
+                if updated_by_user is not None:
+                    update_fields.append("UPDATED_BY_USER = :updated_by_user")
+                    params['updated_by_user'] = updated_by_user
+                
+                update_fields.append("UPDATED_DATE = CURRENT_TIMESTAMP")
+                
+                update_sql = f"""
+                UPDATE {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS 
+                SET {', '.join(update_fields)}
+                WHERE ORIGINAL_DFI_ACCOUNT_NUMBER = :original_dfi_account_number
+                """
+                
+                cursor.execute(update_sql, params)
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Updated swap by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to update swap by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}: {e}")
+            raise
+    
+    def delete_ach_account_swap(self, swap_id: int) -> bool:
+        """Delete a ACH_ACCOUNT_NUMBER_SWAPS record by SWAP_ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                delete_sql = f"DELETE FROM {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS WHERE SWAP_ID = :swap_id"
+                cursor.execute(delete_sql, {'swap_id': swap_id})
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Deleted ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to delete ACH_ACCOUNT_NUMBER_SWAPS record {swap_id}: {e}")
+            raise
+    
+    def delete_swap_by_original_account(self, original_dfi_account_number: str) -> bool:
+        """Delete swap(s) by ORIGINAL_DFI_ACCOUNT_NUMBER."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                delete_sql = f"DELETE FROM {self.config.db_schema}.ACH_ACCOUNT_NUMBER_SWAPS WHERE ORIGINAL_DFI_ACCOUNT_NUMBER = :original_dfi_account_number"
+                cursor.execute(delete_sql, {'original_dfi_account_number': original_dfi_account_number})
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Deleted swap(s) by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to delete swap by ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}: {e}")
+            raise
+    
+    def update_ach_entry_detail_with_swap(
+        self,
+        entry_detail_id: int,
+        original_dfi_account_number: str,
+        updated_by_user: Optional[str] = None
+    ) -> bool:
+        """Update ACH_ENTRY_DETAIL using swap by ORIGINAL_DFI_ACCOUNT_NUMBER and ENTRY_DETAIL_ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # First, get the swap information
+                swap = self.get_swap_by_original_account(original_dfi_account_number)
+                if not swap or not swap.swap_account_number:
+                    logger.warning(f"No swap found for ORIGINAL_DFI_ACCOUNT_NUMBER {original_dfi_account_number}")
+                    return False
+                
+                # Update the ACH_ENTRY_DETAIL record
+                update_fields = []
+                params = {'entry_detail_id': entry_detail_id}
+                
+                update_fields.append("DFI_ACCOUNT_NUMBER = :swap_account_number")
+                params['swap_account_number'] = swap.swap_account_number
+                
+                if updated_by_user is not None:
+                    # Note: ACH_ENTRY_DETAIL might not have UPDATED_BY_USER field
+                    # We'll just update the account number
+                    pass
+                
+                update_sql = f"""
+                UPDATE {self.config.db_schema}.ACH_ENTRY_DETAIL 
+                SET {', '.join(update_fields)}
+                WHERE ENTRY_DETAIL_ID = :entry_detail_id
+                """
+                
+                cursor.execute(update_sql, params)
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Updated ACH_ENTRY_DETAIL {entry_detail_id} with swap account {swap.swap_account_number}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to update ACH_ENTRY_DETAIL {entry_detail_id} with swap: {e}")
             raise
