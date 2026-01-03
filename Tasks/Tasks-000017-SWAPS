@@ -1,0 +1,36 @@
+Please create an API to handle SWAPS
+The table is already created
+ACH_ACCOUNT_NUMBER_SWAPS
+Name                        Null?    Type          
+--------------------------- -------- ------------- 
+SWAP_ID                     NOT NULL NUMBER(38)    
+ORIGINAL_DFI_ACCOUNT_NUMBER          VARCHAR2(17)  
+SWAP_ACCOUNT_NUMBER                  VARCHAR2(17)  
+SWAP_MEMO                   NOT NULL VARCHAR2(255) 
+CREATED_BY_USER             NOT NULL VARCHAR2(50)  
+CREATED_DATE                NOT NULL TIMESTAMP(6)  
+UPDATED_BY_USER                      VARCHAR2(50)  
+UPDATED_DATE                         TIMESTAMP(6)  
+
+
+Create a API to handle the data in the SWAPS table
+Create a API to read by ORIGINAL_DFI_ACCOUNT_NUMBER to get the SWAP_ACCOUNT_NUMBER and SWAP_MEMO
+Please create a API to create a new swap
+Please create a API to update a swap
+Please create a API to delete a swap
+Please create a API to get all swaps
+Please create a API to get a swap by SWAP_ID
+Please create a API to get a swap by ORIGINAL_DFI_ACCOUNT_NUMBER
+Please create a API to get a swap by SWAP_ACCOUNT_NUMBER
+Please create a API to get a swap by SWAP_MEMO
+
+Please create a api to update the SWAP_ACCOUNT_NUMBER and SWAP_MEMO by ORIGINAL_DFI_ACCOUNT_NUMBER
+Please create a api to delete the SWAP_ACCOUNT_NUMBER and SWAP_MEMO by ORIGINAL_DFI_ACCOUNT_NUMBER
+Please create a api to get all swaps by ORIGINAL_DFI_ACCOUNT_NUMBER
+Please create a api to get a swap by SWAP_ID by ORIGINAL_DFI_ACCOUNT_NUMBER
+Please create a api to get a swap by SWAP_ACCOUNT_NUMBER by ORIGINAL_DFI_ACCOUNT_NUMBER
+Please create a api to get a swap by SWAP_MEMO by ORIGINAL_DFI_ACCOUNT_NUMBER
+Please create a api to update the SWAP_MEMO and SWAP_ACCOUNT_NUMBER by ORIGINAL_DFI_ACCOUNT_NUMBER on a ACH_ENTRY_DETAIL by ENTRY_DETAIL_ID 
+
+
+
