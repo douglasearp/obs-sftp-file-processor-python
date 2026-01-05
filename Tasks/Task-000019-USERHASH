@@ -1,0 +1,602 @@
+# Backend Authentication Refactoring Plan
+
+## Executive Summary
+
+**Current Problem**: The backend currently performs hash-to-hash comparison, which is not the standard authentication pattern. The frontend must store and send pre-generated password hashes instead of plain passwords.
+
+**Proposed Solution**: Refactor backend to accept plain passwords and use `bcrypt.compare()` (via passlib) to validate against stored hashes in the database.
+
+---
+
+## Current Implementation Analysis
+
+### Backend Repository Location
+```
+/Users/dougearp/repos/obs-sftp-file-processor-python
+```
+
+### Current Authentication Flow
+
+**1. Frontend sends hash to backend:**
+```typescript
+// Frontend: app/api/oracle-auth/route.ts
+const storedHash = USER_PASSWORD_HASHES[email]  // Pre-stored hash
+await fetch('/oracle-auth', {
+  body: JSON.stringify({
+    email: 'dearp@openbankingsolutions.com',
+    password_hash: '$2b$12$HyRo2NsnVPk9raBPcYpGRODKMIn75e0AHV48/y8XP0fgRt8e1ZbCy'
+  })
+})
+```
+
+**2. Backend compares hash directly to database:**
+```python
+# Backend: src/obs_sftp_file_processor/oracle_service.py
+# Line 807-847: check_email_password_hash()
+select_sql = """
+SELECT IS_ADMIN
+FROM API_USERS
+WHERE UPPER(EMAIL) = UPPER(:email)
+  AND PASSWORD_HASH = :password_hash  ← Direct string comparison
+  AND IS_ACTIVE = 1
+"""
+```
+
+**Problems with current approach:**
+- ❌ Frontend must store password hashes (security concern)
+- ❌ Not using bcrypt's built-in verification
+- ❌ Cannot leverage bcrypt security features
+- ❌ Non-standard authentication pattern
+- ❌ Hashes are committed to frontend code
+
+---
+
+## Proposed Implementation
+
+### New Authentication Flow
+
+**1. Frontend sends plain password:**
+```typescript
+// Frontend: app/api/oracle-auth/route.ts (after refactor)
+await fetch('/oracle-auth', {
+  body: JSON.stringify({
+    email: 'dearp@openbankingsolutions.com',
+    password: '@Buttermilk1985!!'  // Plain text password
+  })
+})
+```
+
+**2. Backend retrieves hash and uses bcrypt.compare():**
+```python
+# Backend: src/obs_sftp_file_processor/oracle_service.py (after refactor)
+def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
+    """
+    Authenticate user with email and plain password using bcrypt.
+    
+    Args:
+        email: User email address
+        password: Plain text password
+        
+    Returns:
+        Dictionary with authenticated status and is_admin flag
+    """
+    # 1. Get user record with stored hash
+    user = self.get_user_by_email(email)
+    
+    if not user or not user['is_active']:
+        return {'authenticated': False, 'is_admin': False}
+    
+    # 2. Use bcrypt to verify password against stored hash
+    if pwd_context.verify(password, user['password_hash']):
+        return {
+            'authenticated': True,
+            'is_admin': user['is_admin']
+        }
+    else:
+        return {'authenticated': False, 'is_admin': False}
+```
+
+---
+
+## Files to Modify
+
+### 1. Backend Models (`src/obs_sftp_file_processor/models.py`)
+
+**Current (Line 137-141):**
+```python
+class OracleAuthRequest(BaseModel):
+    """Request model for Oracle authentication check."""
+    
+    email: str = Field(..., description="User email address")
+    password_hash: str = Field(..., description="Password hash to verify")
+```
+
+**Change to:**
+```python
+class OracleAuthRequest(BaseModel):
+    """Request model for Oracle authentication check."""
+    
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., description="User password (plain text)")
+```
+
+---
+
+### 2. Backend Oracle Service (`src/obs_sftp_file_processor/oracle_service.py`)
+
+**Add passlib import at top of file:**
+```python
+from passlib.context import CryptContext
+
+# Initialize password context (same as hash_passwords.py)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+```
+
+**Replace method (Line 807-847):**
+
+**OLD METHOD - REMOVE THIS:**
+```python
+def check_email_password_hash(self, email: str, password_hash: str) -> Dict[str, Any]:
+    """
+    Check if email and password hash match in API_USERS table.
+    """
+    try:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            select_sql = """
+            SELECT IS_ADMIN
+            FROM API_USERS
+            WHERE UPPER(EMAIL) = UPPER(:email)
+              AND PASSWORD_HASH = :password_hash
+              AND IS_ACTIVE = 1
+            """
+            
+            cursor.execute(select_sql, {
+                'email': email,
+                'password_hash': password_hash
+            })
+            
+            result = cursor.fetchone()
+            
+            if result:
+                is_admin = bool(result[0]) if result[0] is not None else False
+                return {
+                    'authenticated': True,
+                    'is_admin': is_admin
+                }
+            else:
+                return {
+                    'authenticated': False,
+                    'is_admin': False
+                }
+    except Exception as e:
+        logger.error(f"Failed to check email and password hash: {e}")
+        return {
+            'authenticated': False,
+            'is_admin': False
+        }
+```
+
+**NEW METHOD - ADD THIS:**
+```python
+def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
+    """
+    Authenticate user with email and plain password using bcrypt verification.
+    
+    This method:
+    1. Retrieves the user record from API_USERS by email
+    2. Checks if user is active
+    3. Uses bcrypt.compare() (via passlib) to verify the plain password
+       against the stored hash
+    4. Returns authentication status and admin flag
+    
+    Args:
+        email: User email address
+        password: Plain text password to verify
+        
+    Returns:
+        Dictionary with:
+        - authenticated: bool - True if password matches stored hash
+        - is_admin: bool - True if user is admin (only when authenticated=True)
+    """
+    try:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get user record with stored password hash
+            select_sql = """
+            SELECT PASSWORD_HASH, IS_ADMIN, IS_ACTIVE
+            FROM API_USERS
+            WHERE UPPER(EMAIL) = UPPER(:email)
+            """
+            
+            cursor.execute(select_sql, {'email': email})
+            result = cursor.fetchone()
+            
+            # Check if user exists
+            if not result:
+                logger.warning(f"Authentication failed: User not found for email: {email}")
+                return {
+                    'authenticated': False,
+                    'is_admin': False
+                }
+            
+            stored_hash, is_admin, is_active = result
+            
+            # Check if user is active
+            if not is_active:
+                logger.warning(f"Authentication failed: User is inactive: {email}")
+                return {
+                    'authenticated': False,
+                    'is_admin': False
+                }
+            
+            # Use bcrypt to verify password against stored hash
+            # This is the standard, secure way to validate passwords
+            if pwd_context.verify(password, stored_hash):
+                logger.info(f"Authentication successful for: {email} (IS_ADMIN: {is_admin})")
+                return {
+                    'authenticated': True,
+                    'is_admin': bool(is_admin) if is_admin is not None else False
+                }
+            else:
+                logger.warning(f"Authentication failed: Invalid password for email: {email}")
+                return {
+                    'authenticated': False,
+                    'is_admin': False
+                }
+                
+    except Exception as e:
+        logger.error(f"Failed to authenticate user {email}: {e}")
+        return {
+            'authenticated': False,
+            'is_admin': False
+        }
+```
+
+---
+
+### 3. Backend Main API Endpoint (`src/obs_sftp_file_processor/main.py`)
+
+**Update endpoint (Line 1823-1867):**
+
+**OLD CODE - REPLACE:**
+```python
+@app.post("/oracle-auth", response_model=OracleAuthResponse)
+async def oracle_auth(
+    request: OracleAuthRequest,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """
+    Check if email and password hash match in API_USERS table.
+    """
+    try:
+        # Check rate limit
+        is_allowed, remaining = oracle_auth_rate_limiter.is_allowed(request.email)
+        
+        if not is_allowed:
+            logger.warning(f"Rate limit exceeded for email: {request.email}")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Maximum 15 requests per minute per email."
+            )
+        
+        # Check email and password hash in database
+        with oracle_service:
+            auth_result = oracle_service.check_email_password_hash(
+                email=request.email,
+                password_hash=request.password_hash
+            )
+        
+        logger.info(f"Oracle auth check for {request.email}: ...")
+        
+        return OracleAuthResponse(
+            authenticated=auth_result['authenticated'],
+            is_admin=auth_result['is_admin']
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to check email and password hash: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check authentication: {str(e)}"
+        )
+```
+
+**NEW CODE:**
+```python
+@app.post("/oracle-auth", response_model=OracleAuthResponse)
+async def oracle_auth(
+    request: OracleAuthRequest,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """
+    Authenticate user with email and password using bcrypt verification.
+    
+    This endpoint:
+    - Accepts plain text password (transmitted over HTTPS)
+    - Uses bcrypt.compare() to verify against stored hash
+    - Returns authentication status and admin flag
+    - Rate limited to 15 requests per minute per email
+    
+    Security notes:
+    - Password is transmitted as plain text over HTTPS (standard practice)
+    - Never logged or stored in plain text
+    - Bcrypt handles secure comparison with stored hash
+    """
+    try:
+        # Check rate limit
+        is_allowed, remaining = oracle_auth_rate_limiter.is_allowed(request.email)
+        
+        if not is_allowed:
+            logger.warning(f"Rate limit exceeded for email: {request.email}")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Maximum 15 requests per minute per email. Please try again later."
+            )
+        
+        # Authenticate user with bcrypt password verification
+        with oracle_service:
+            auth_result = oracle_service.authenticate_user(
+                email=request.email,
+                password=request.password  # Plain password - bcrypt handles securely
+            )
+        
+        logger.info(f"Oracle auth check for {request.email}: {'Authenticated' if auth_result['authenticated'] else 'Not authenticated'} (IS_ADMIN: {auth_result['is_admin']}, remaining requests: {remaining})")
+        
+        return OracleAuthResponse(
+            authenticated=auth_result['authenticated'],
+            is_admin=auth_result['is_admin']
+        )
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like rate limit)
+        raise
+    except Exception as e:
+        logger.error(f"Failed to authenticate user: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check authentication: {str(e)}"
+        )
+```
+
+---
+
+## Testing Plan
+
+### 1. Test with existing users
+
+**Users in database:**
+- `dearp@openbankingsolutions.com` - Password: `@Buttermilk1985!!`
+- `lscarnici@openbankingsolutions.com` - Password: *(needs to be confirmed)*
+
+**Test cases:**
+```bash
+# Test 1: Valid credentials
+curl -X POST http://localhost:8000/oracle-auth \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "dearp@openbankingsolutions.com",
+    "password": "@Buttermilk1985!!"
+  }'
+
+# Expected response:
+# {"authenticated": true, "is_admin": 1}
+
+# Test 2: Invalid password
+curl -X POST http://localhost:8000/oracle-auth \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "dearp@openbankingsolutions.com",
+    "password": "wrongpassword"
+  }'
+
+# Expected response:
+# {"authenticated": false, "is_admin": false}
+
+# Test 3: Non-existent user
+curl -X POST http://localhost:8000/oracle-auth \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "nonexistent@example.com",
+    "password": "anypassword"
+  }'
+
+# Expected response:
+# {"authenticated": false, "is_admin": false}
+```
+
+### 2. Verify bcrypt compatibility
+
+The bcrypt hashes in the database should work correctly with passlib:
+
+```python
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+
+# Hash from database
+stored_hash = '$2b$12$HyRo2NsnVPk9raBPcYpGRODKMIn75e0AHV48/y8XP0fgRt8e1ZbCy'
+
+# Should return True
+result = pwd_context.verify('@Buttermilk1985!!', stored_hash)
+print(f"Verification result: {result}")  # Should print: True
+```
+
+---
+
+## Frontend Changes Required (After Backend is Updated)
+
+Once backend is updated, the frontend needs to be simplified:
+
+### 1. Remove user-hashes.ts file
+```bash
+# This file will no longer be needed:
+rm app/utils/user-hashes.ts
+```
+
+### 2. Update oracle-auth route (`app/api/oracle-auth/route.ts`)
+
+**Change from:**
+```typescript
+const storedHash = getStoredHashForUser(email)
+const response = await fetch(`${apiUrl}/oracle-auth`, {
+  body: JSON.stringify({
+    email: email,
+    password_hash: storedHash
+  })
+})
+```
+
+**Change to:**
+```typescript
+const response = await fetch(`${apiUrl}/oracle-auth`, {
+  body: JSON.stringify({
+    email: email,
+    password: password  // Send plain password - travels over HTTPS
+  })
+})
+```
+
+### 3. Update login page (`app/login/page.tsx`)
+
+No changes needed - it already collects plain password from user.
+
+---
+
+## Security Considerations
+
+### Why Plain Password Over HTTPS is Safe
+
+**Current (Insecure) Flow:**
+1. Frontend stores hashes in code ❌
+2. Frontend sends hash over network
+3. Backend compares hash strings
+
+**New (Secure) Flow:**
+1. Frontend sends password over HTTPS ✅
+2. Backend uses bcrypt.verify() with stored hash
+3. Password never stored or logged
+
+**Security improvements:**
+- ✅ No password hashes in frontend code
+- ✅ Standard bcrypt.compare() verification
+- ✅ HTTPS encrypts password in transit
+- ✅ Password never logged or stored
+- ✅ Timing-safe comparison via bcrypt
+- ✅ Rate limiting prevents brute force
+
+---
+
+## Dependencies Check
+
+### Required Python packages
+
+**Check if passlib is installed:**
+```bash
+# In backend directory
+grep -i passlib pyproject.toml
+```
+
+**If not present, add:**
+```toml
+[tool.poetry.dependencies]
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+```
+
+**Then install:**
+```bash
+poetry install
+```
+
+---
+
+## Rollback Plan
+
+If issues occur, backend can temporarily support both methods:
+
+```python
+@app.post("/oracle-auth", response_model=OracleAuthResponse)
+async def oracle_auth(request: OracleAuthRequest, ...):
+    # Try new method first (with plain password)
+    if hasattr(request, 'password') and request.password:
+        auth_result = oracle_service.authenticate_user(
+            email=request.email,
+            password=request.password
+        )
+    # Fallback to old method (with hash)
+    elif hasattr(request, 'password_hash') and request.password_hash:
+        auth_result = oracle_service.check_email_password_hash(
+            email=request.email,
+            password_hash=request.password_hash
+        )
+    else:
+        raise HTTPException(400, "Either password or password_hash required")
+    
+    return OracleAuthResponse(**auth_result)
+```
+
+---
+
+## Implementation Checklist
+
+- [ ] 1. Verify passlib is installed with bcrypt support
+- [ ] 2. Update `models.py` - change `password_hash` to `password` in `OracleAuthRequest`
+- [ ] 3. Update `oracle_service.py` - add passlib import and `pwd_context`
+- [ ] 4. Update `oracle_service.py` - add new `authenticate_user()` method
+- [ ] 5. Update `main.py` - modify `/oracle-auth` endpoint to use new method
+- [ ] 6. Test with existing users and their plain passwords
+- [ ] 7. Verify bcrypt.verify() works with stored hashes
+- [ ] 8. Deploy backend changes
+- [ ] 9. Update frontend to send plain passwords
+- [ ] 10. Remove `app/utils/user-hashes.ts` from frontend
+- [ ] 11. Test end-to-end authentication flow
+- [ ] 12. Document new authentication flow
+
+---
+
+## Questions to Answer Before Implementation
+
+1. **What is lscarnici's plain password?** 
+   - Need this to test both users after backend changes
+   
+2. **Are there other users in API_USERS table?**
+   - Run: `SELECT EMAIL, IS_ADMIN, IS_ACTIVE FROM API_USERS`
+   
+3. **Is passlib already installed in backend?**
+   - Check: `poetry show | grep passlib`
+   
+4. **Should we keep old method temporarily for backward compatibility?**
+   - Allows gradual rollout
+   
+5. **Are passwords transmitted over HTTPS in production?**
+   - Verify SSL/TLS is properly configured
+
+---
+
+## Summary
+
+**Current State:**
+- Frontend: Stores hashes, sends hash to backend
+- Backend: Compares hash === hash
+
+**Target State:**
+- Frontend: Collects password, sends to backend over HTTPS
+- Backend: Uses bcrypt.verify(password, stored_hash)
+
+**Benefits:**
+- 🔒 More secure (no hashes in frontend code)
+- 📚 Standard authentication pattern
+- 🛡️ Leverages bcrypt security features
+- 🧹 Cleaner frontend code
+- ✅ Industry best practice
+
+**Effort:**
+- Backend: ~2 hours (3 files, straightforward changes)
+- Frontend: ~30 minutes (2 files, removal of hash logic)
+- Testing: ~1 hour (verify all scenarios)
+- **Total: ~3.5 hours**
+
