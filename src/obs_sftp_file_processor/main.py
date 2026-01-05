@@ -1963,7 +1963,12 @@ async def create_api_user(
 ):
     """Create a new API_USERS record.
     
-    The password will be hashed using bcrypt (12 rounds) before storing.
+    Args:
+        user: User data including username, password, email, and created_by_user (required)
+    
+    Note: 
+        - The password will be hashed using bcrypt (12 rounds) before storing.
+        - created_by_user is required and will be stored in CREATED_BY_USER field.
     """
     try:
         with oracle_service:
@@ -1991,9 +1996,12 @@ async def update_api_user(
     
     Args:
         user_id: The ID of the API_USERS record to update
-        user: The update data (username, email, password, is_active, is_admin, etc.)
+        user: The update data (username, email, password, is_active, is_admin, updated_by_user, etc.)
     
-    Note: If password is provided, it will be hashed using bcrypt (12 rounds) before storing.
+    Note: 
+        - If password is provided, it will be hashed using bcrypt (12 rounds) before storing.
+        - UPDATED_DATE is automatically set to CURRENT_TIMESTAMP on every update.
+        - If updated_by_user is provided, it will be stored in UPDATED_BY_USER field.
     """
     try:
         with oracle_service:

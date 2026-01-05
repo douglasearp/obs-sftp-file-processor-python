@@ -2076,6 +2076,7 @@ class OracleService:
                     FULL_NAME,
                     IS_ACTIVE,
                     IS_ADMIN,
+                    CREATED_BY_USER,
                     CREATED_DATE
                 ) VALUES (
                     :username,
@@ -2084,6 +2085,7 @@ class OracleService:
                     :full_name,
                     :is_active,
                     :is_admin,
+                    :created_by_user,
                     CURRENT_TIMESTAMP
                 ) RETURNING USER_ID INTO :user_id
                 """
@@ -2096,6 +2098,7 @@ class OracleService:
                     'full_name': user.full_name,
                     'is_active': user.is_active,
                     'is_admin': user.is_admin,
+                    'created_by_user': user.created_by_user,
                     'user_id': user_id
                 })
                 
@@ -2123,7 +2126,10 @@ class OracleService:
                     FULL_NAME,
                     IS_ACTIVE,
                     IS_ADMIN,
+                    CREATED_BY_USER,
                     CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE,
                     LAST_LOGIN,
                     FAILED_LOGIN_ATTEMPTS,
                     LOCKED_UNTIL
@@ -2142,10 +2148,13 @@ class OracleService:
                         full_name=result[3],
                         is_active=result[4],
                         is_admin=result[5],
-                        created_date=result[6],
-                        last_login=result[7],
-                        failed_login_attempts=result[8] if result[8] is not None else 0,
-                        locked_until=result[9]
+                        created_by_user=result[6],
+                        created_date=result[7],
+                        updated_by_user=result[8],
+                        updated_date=result[9],
+                        last_login=result[10],
+                        failed_login_attempts=result[11] if result[11] is not None else 0,
+                        locked_until=result[12]
                     )
                 return None
                 
@@ -2197,7 +2206,10 @@ class OracleService:
                     FULL_NAME,
                     IS_ACTIVE,
                     IS_ADMIN,
+                    CREATED_BY_USER,
                     CREATED_DATE,
+                    UPDATED_BY_USER,
+                    UPDATED_DATE,
                     LAST_LOGIN,
                     FAILED_LOGIN_ATTEMPTS,
                     LOCKED_UNTIL
@@ -2222,10 +2234,13 @@ class OracleService:
                         full_name=result[3],
                         is_active=result[4],
                         is_admin=result[5],
-                        created_date=result[6],
-                        last_login=result[7],
-                        failed_login_attempts=result[8] if result[8] is not None else 0,
-                        locked_until=result[9]
+                        created_by_user=result[6],
+                        created_date=result[7],
+                        updated_by_user=result[8],
+                        updated_date=result[9],
+                        last_login=result[10],
+                        failed_login_attempts=result[11] if result[11] is not None else 0,
+                        locked_until=result[12]
                     ))
                 
                 return users
@@ -2319,10 +2334,13 @@ class OracleService:
                     update_fields.append("IS_ADMIN = :is_admin")
                     params['is_admin'] = user.is_admin
                 
-                if not update_fields:
-                    logger.warning(f"No fields to update for API_USERS {user_id}")
-                    return False
+                # Always update UPDATED_DATE and UPDATED_BY_USER on any update
+                update_fields.append("UPDATED_DATE = CURRENT_TIMESTAMP")
+                if user.updated_by_user:
+                    update_fields.append("UPDATED_BY_USER = :updated_by_user")
+                    params['updated_by_user'] = user.updated_by_user
                 
+                # Note: update_fields will always have at least UPDATED_DATE, so no need to check if empty
                 update_sql = f"""
                 UPDATE {self.config.db_schema}.API_USERS
                 SET {', '.join(update_fields)}

@@ -13,12 +13,15 @@ class ApiUserBase(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100, description="User full name")
     is_active: int = Field(1, description="Account active status (1=active, 0=inactive)")
     is_admin: int = Field(0, description="Admin flag (1=admin, 0=user)")
+    created_by_user: Optional[str] = Field(None, max_length=50, description="User who created the record")
+    updated_by_user: Optional[str] = Field(None, max_length=50, description="User who last updated the record")
 
 
 class ApiUserCreate(ApiUserBase):
     """Model for creating API_USERS records."""
     
     password: str = Field(..., description="Plain text password (will be hashed with bcrypt)")
+    created_by_user: str = Field(..., max_length=50, description="User who created the record")
 
 
 class ApiUserUpdate(BaseModel):
@@ -30,6 +33,7 @@ class ApiUserUpdate(BaseModel):
     password: Optional[str] = Field(None, description="Plain text password (will be hashed with bcrypt if provided)")
     is_active: Optional[int] = Field(None, description="Account active status (1=active, 0=inactive)")
     is_admin: Optional[int] = Field(None, description="Admin flag (1=admin, 0=user)")
+    updated_by_user: Optional[str] = Field(None, max_length=50, description="User who updated the record")
 
 
 class ApiUser(ApiUserBase):
@@ -37,6 +41,7 @@ class ApiUser(ApiUserBase):
     
     user_id: int = Field(..., description="Primary key - auto-generated")
     created_date: datetime = Field(..., description="Creation timestamp")
+    updated_date: Optional[datetime] = Field(None, description="Last update timestamp")
     last_login: Optional[datetime] = Field(None, description="Last successful login timestamp")
     failed_login_attempts: int = Field(0, description="Counter for failed login attempts")
     locked_until: Optional[datetime] = Field(None, description="Account lock expiration timestamp")
@@ -54,7 +59,10 @@ class ApiUserResponse(BaseModel):
     full_name: Optional[str] = None
     is_active: int
     is_admin: int
+    created_by_user: Optional[str] = None
     created_date: datetime
+    updated_by_user: Optional[str] = None
+    updated_date: Optional[datetime] = None
     last_login: Optional[datetime] = None
     failed_login_attempts: int = 0
     locked_until: Optional[datetime] = None
