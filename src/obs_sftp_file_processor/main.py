@@ -1826,10 +1826,18 @@ async def oracle_auth(
     oracle_service: OracleService = Depends(get_oracle_service)
 ):
     """
-    Check if email and password hash match in API_USERS table.
+    Authenticate user with email and password using bcrypt verification.
     
-    Returns authenticated (true/false) and is_admin flag.
-    Rate limited to 15 requests per minute per email.
+    This endpoint:
+    - Accepts plain text password (transmitted over HTTPS)
+    - Uses bcrypt.verify() to verify against stored hash
+    - Returns authentication status and admin flag
+    - Rate limited to 15 requests per minute per email
+    
+    Security notes:
+    - Password is transmitted as plain text over HTTPS (standard practice)
+    - Never logged or stored in plain text
+    - Bcrypt handles secure comparison with stored hash
     """
     try:
         # Check rate limit
@@ -1842,11 +1850,11 @@ async def oracle_auth(
                 detail=f"Rate limit exceeded. Maximum 15 requests per minute per email. Please try again later."
             )
         
-        # Check email and password hash in database
+        # Authenticate user with bcrypt password verification
         with oracle_service:
-            auth_result = oracle_service.check_email_password_hash(
+            auth_result = oracle_service.authenticate_user(
                 email=request.email,
-                password_hash=request.password_hash
+                password=request.password  # Plain password - bcrypt handles securely
             )
         
         logger.info(f"Oracle auth check for {request.email}: {'Authenticated' if auth_result['authenticated'] else 'Not authenticated'} (IS_ADMIN: {auth_result['is_admin']}, remaining requests: {remaining})")
@@ -1860,7 +1868,7 @@ async def oracle_auth(
         # Re-raise HTTP exceptions (like rate limit)
         raise
     except Exception as e:
-        logger.error(f"Failed to check email and password hash: {e}")
+        logger.error(f"Failed to authenticate user: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to check authentication: {str(e)}"

@@ -138,13 +138,13 @@ class OracleAuthRequest(BaseModel):
     """Request model for Oracle authentication check."""
     
     email: str = Field(..., description="User email address")
-    password_hash: str = Field(..., description="Password hash to verify")
+    password: str = Field(..., description="User password (plain text, transmitted over HTTPS)")
 
 
 class OracleAuthResponse(BaseModel):
     """Response model for Oracle authentication check."""
     
-    authenticated: bool = Field(..., description="True if email and password hash match, False otherwise")
+    authenticated: bool = Field(..., description="True if email and password match, False otherwise")
     is_admin: bool = Field(False, description="True if user is admin, False otherwise (only set when authenticated=True)")
 
 

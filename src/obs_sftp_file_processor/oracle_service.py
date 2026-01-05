@@ -5,6 +5,7 @@ import oracledb
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from loguru import logger
+import bcrypt
 from .oracle_config import OracleConfig
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse
 from .fi_holidays_models import FiHolidayCreate, FiHolidayUpdate, FiHolidayResponse
@@ -804,57 +805,89 @@ class OracleService:
             logger.error(f"Failed to get active clients: {e}")
             raise
     
-    def check_email_password_hash(self, email: str, password_hash: str) -> Dict[str, Any]:
+    def authenticate_user(self, email: str, password: str) -> Dict[str, Any]:
         """
-        Check if email and password hash match in API_USERS table.
+        Authenticate user with email and plain password using bcrypt verification.
+        
+        This method:
+        1. Retrieves the user record from API_USERS by email
+        2. Checks if user is active
+        3. Uses bcrypt.verify() (via passlib) to verify the plain password
+           against the stored hash
+        4. Returns authentication status and admin flag
         
         Args:
             email: User email address
-            password_hash: Password hash to verify
+            password: Plain text password to verify
             
         Returns:
             Dictionary with:
-            - authenticated: bool - True if match found
+            - authenticated: bool - True if password matches stored hash
             - is_admin: bool - True if user is admin (only when authenticated=True)
         """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Query API_USERS table for matching email and password_hash
-                # Also check that user is active, and get IS_ADMIN
+                # Get user record with stored password hash
                 select_sql = """
-                SELECT IS_ADMIN
+                SELECT PASSWORD_HASH, IS_ADMIN, IS_ACTIVE
                 FROM API_USERS
                 WHERE UPPER(EMAIL) = UPPER(:email)
-                  AND PASSWORD_HASH = :password_hash
-                  AND IS_ACTIVE = 1
                 """
                 
-                cursor.execute(select_sql, {
-                    'email': email,
-                    'password_hash': password_hash
-                })
-                
+                cursor.execute(select_sql, {'email': email})
                 result = cursor.fetchone()
                 
-                if result:
-                    is_admin = bool(result[0]) if result[0] is not None else False
-                    logger.info(f"Email and password hash match found for: {email} (IS_ADMIN: {is_admin})")
+                # Check if user exists
+                if not result:
+                    logger.warning(f"Authentication failed: User not found for email: {email}")
+                    return {
+                        'authenticated': False,
+                        'is_admin': False
+                    }
+                
+                stored_hash, is_admin, is_active = result
+                
+                # Check if user is active
+                if not is_active:
+                    logger.warning(f"Authentication failed: User is inactive: {email}")
+                    return {
+                        'authenticated': False,
+                        'is_admin': False
+                    }
+                
+                # Use bcrypt to verify password against stored hash
+                # This is the standard, secure way to validate passwords
+                # Use bcrypt directly to avoid passlib compatibility issues
+                try:
+                    # Encode password to bytes for bcrypt
+                    password_bytes = password.encode('utf-8')
+                    hash_bytes = stored_hash.encode('utf-8')
+                    password_matches = bcrypt.checkpw(password_bytes, hash_bytes)
+                except Exception as verify_error:
+                    logger.error(f"Bcrypt verification error: {verify_error}")
+                    password_matches = False
+                
+                if password_matches:
+                    logger.info(f"Authentication successful for: {email} (IS_ADMIN: {is_admin})")
                     return {
                         'authenticated': True,
-                        'is_admin': is_admin
+                        'is_admin': bool(is_admin) if is_admin is not None else False
                     }
                 else:
-                    logger.info(f"No match found for email: {email}")
+                    logger.warning(f"Authentication failed: Invalid password for email: {email}")
                     return {
                         'authenticated': False,
                         'is_admin': False
                     }
                 
         except Exception as e:
-            logger.error(f"Failed to check email and password hash: {e}")
-            raise
+            logger.error(f"Failed to authenticate user {email}: {e}")
+            return {
+                'authenticated': False,
+                'is_admin': False
+            }
     
     def insert_ach_file_header(self, file_id: int, record: AchFileHeaderCreate) -> int:
         """Insert ACH_FILE_HEADER record."""
