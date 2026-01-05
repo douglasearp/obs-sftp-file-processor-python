@@ -22,6 +22,7 @@ from .oracle_service import OracleService
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse, AchFileListResponse, AchFileUpdateByFileIdRequest, AchClientResponse, AchClientListResponse
 from .fi_holidays_models import FiHolidayCreate, FiHolidayUpdate, FiHolidayResponse, FiHolidayListResponse
 from .ach_account_swaps_models import AchAccountSwapCreate, AchAccountSwapUpdate, AchAccountSwapResponse, AchAccountSwapListResponse, SwapLookupResponse
+from .api_users_models import ApiUserCreate, ApiUserUpdate, ApiUserResponse, ApiUserListResponse
 from .ach_file_lines_service import AchFileLinesService
 from .ach_file_blobs_service import AchFileBlobsService
 from .ach_file_blobs_models import AchFileBlobCreate, AchFileBlobResponse
@@ -1872,6 +1873,177 @@ async def oracle_auth(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to check authentication: {str(e)}"
+        )
+
+
+# ==================== API_USERS Endpoints ====================
+
+@app.get("/oracle/api-users", response_model=ApiUserListResponse)
+async def get_api_users(
+    limit: int = 100,
+    offset: int = 0,
+    username: Optional[str] = None,
+    email: Optional[str] = None,
+    is_active: Optional[int] = None,
+    is_admin: Optional[int] = None,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get list of API_USERS records.
+    
+    Args:
+        limit: Maximum number of records to return (default: 100)
+        offset: Number of records to skip (default: 0)
+        username: Filter by username (partial match, case-insensitive)
+        email: Filter by email (partial match, case-insensitive)
+        is_active: Filter by active status (1=active, 0=inactive, None=all)
+        is_admin: Filter by admin status (1=admin, 0=user, None=all)
+    """
+    try:
+        with oracle_service:
+            users = oracle_service.get_api_users(
+                limit=limit,
+                offset=offset,
+                username=username,
+                email=email,
+                is_active=is_active,
+                is_admin=is_admin
+            )
+            total_count = oracle_service.get_api_users_count(
+                username=username,
+                email=email,
+                is_active=is_active,
+                is_admin=is_admin
+            )
+            
+            return ApiUserListResponse(
+                users=users,
+                total_count=total_count
+            )
+            
+    except Exception as e:
+        logger.error(f"Failed to get API_USERS: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get API_USERS: {str(e)}"
+        )
+
+
+@app.get("/oracle/api-users/{user_id}", response_model=ApiUserResponse)
+async def get_api_user(
+    user_id: int,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Get a specific API_USERS record by USER_ID."""
+    try:
+        with oracle_service:
+            user = oracle_service.get_api_user(user_id)
+            
+            if not user:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"API_USERS record not found: {user_id}"
+                )
+            
+            return user
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get API_USERS record {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get API_USERS record: {str(e)}"
+        )
+
+
+@app.post("/oracle/api-users", response_model=ApiUserResponse)
+async def create_api_user(
+    user: ApiUserCreate,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Create a new API_USERS record.
+    
+    The password will be hashed using bcrypt (12 rounds) before storing.
+    """
+    try:
+        with oracle_service:
+            user_id = oracle_service.create_api_user(user)
+            
+            # Get the created record
+            created_user = oracle_service.get_api_user(user_id)
+            return created_user
+            
+    except Exception as e:
+        logger.error(f"Failed to create API_USERS record: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create API_USERS record: {str(e)}"
+        )
+
+
+@app.put("/oracle/api-users/{user_id}", response_model=ApiUserResponse)
+async def update_api_user(
+    user_id: int,
+    user: ApiUserUpdate,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Update an API_USERS record.
+    
+    Args:
+        user_id: The ID of the API_USERS record to update
+        user: The update data (username, email, password, is_active, is_admin, etc.)
+    
+    Note: If password is provided, it will be hashed using bcrypt (12 rounds) before storing.
+    """
+    try:
+        with oracle_service:
+            success = oracle_service.update_api_user(user_id, user)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"API_USERS record not found: {user_id}"
+                )
+            
+            # Get the updated record
+            updated_user = oracle_service.get_api_user(user_id)
+            return updated_user
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update API_USERS record {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update API_USERS record: {str(e)}"
+        )
+
+
+@app.delete("/oracle/api-users/{user_id}")
+async def delete_api_user(
+    user_id: int,
+    oracle_service: OracleService = Depends(get_oracle_service)
+):
+    """Delete an API_USERS record by USER_ID."""
+    try:
+        with oracle_service:
+            success = oracle_service.delete_api_user(user_id)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"API_USERS record not found: {user_id}"
+                )
+            
+            return {"message": f"API_USERS record {user_id} deleted successfully"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete API_USERS record {user_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete API_USERS record: {str(e)}"
         )
 
 

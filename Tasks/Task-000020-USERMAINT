@@ -1,0 +1,3 @@
+Please create an API to mainentance API_USERS
+INSERT, UPDATE, DELETE , and SELECT
+The process will need to use the same BCrypt logic in the oracle-auth

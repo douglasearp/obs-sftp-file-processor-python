@@ -10,6 +10,7 @@ from .oracle_config import OracleConfig
 from .oracle_models import AchFileCreate, AchFileUpdate, AchFileResponse
 from .fi_holidays_models import FiHolidayCreate, FiHolidayUpdate, FiHolidayResponse
 from .ach_account_swaps_models import AchAccountSwapCreate, AchAccountSwapUpdate, AchAccountSwapResponse, SwapLookupResponse
+from .api_users_models import ApiUserCreate, ApiUserUpdate, ApiUserResponse
 from .ach_record_models import (
     AchFileHeaderCreate,
     AchBatchHeaderCreate,
@@ -2053,4 +2054,310 @@ class OracleService:
                 
         except Exception as e:
             logger.error(f"Failed to update ACH_ENTRY_DETAIL {entry_detail_id} with swap: {e}")
+            raise
+    
+    # ==================== API_USERS CRUD Operations ====================
+    
+    def create_api_user(self, user: ApiUserCreate) -> int:
+        """Create a new API_USERS record with bcrypt password hashing."""
+        try:
+            # Hash password using bcrypt (same logic as authenticate_user)
+            password_bytes = user.password.encode('utf-8')
+            password_hash = bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=12)).decode('utf-8')
+            
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                insert_sql = f"""
+                INSERT INTO {self.config.db_schema}.API_USERS (
+                    USERNAME,
+                    PASSWORD_HASH,
+                    EMAIL,
+                    FULL_NAME,
+                    IS_ACTIVE,
+                    IS_ADMIN,
+                    CREATED_DATE
+                ) VALUES (
+                    :username,
+                    :password_hash,
+                    :email,
+                    :full_name,
+                    :is_active,
+                    :is_admin,
+                    CURRENT_TIMESTAMP
+                ) RETURNING USER_ID INTO :user_id
+                """
+                
+                user_id = cursor.var(int)
+                cursor.execute(insert_sql, {
+                    'username': user.username,
+                    'password_hash': password_hash,
+                    'email': user.email,
+                    'full_name': user.full_name,
+                    'is_active': user.is_active,
+                    'is_admin': user.is_admin,
+                    'user_id': user_id
+                })
+                
+                conn.commit()
+                generated_id = user_id.getvalue()[0]
+                
+                logger.info(f"Created API_USERS record with ID: {generated_id} (username: {user.username})")
+                return generated_id
+                
+        except Exception as e:
+            logger.error(f"Failed to create API_USERS record: {e}")
+            raise
+    
+    def get_api_user(self, user_id: int) -> Optional[ApiUserResponse]:
+        """Get an API_USERS record by USER_ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                select_sql = f"""
+                SELECT 
+                    USER_ID,
+                    USERNAME,
+                    EMAIL,
+                    FULL_NAME,
+                    IS_ACTIVE,
+                    IS_ADMIN,
+                    CREATED_DATE,
+                    LAST_LOGIN,
+                    FAILED_LOGIN_ATTEMPTS,
+                    LOCKED_UNTIL
+                FROM {self.config.db_schema}.API_USERS
+                WHERE USER_ID = :user_id
+                """
+                
+                cursor.execute(select_sql, {'user_id': user_id})
+                result = cursor.fetchone()
+                
+                if result:
+                    return ApiUserResponse(
+                        user_id=result[0],
+                        username=result[1],
+                        email=result[2],
+                        full_name=result[3],
+                        is_active=result[4],
+                        is_admin=result[5],
+                        created_date=result[6],
+                        last_login=result[7],
+                        failed_login_attempts=result[8] if result[8] is not None else 0,
+                        locked_until=result[9]
+                    )
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to get API_USERS record: {e}")
+            raise
+    
+    def get_api_users(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+        is_active: Optional[int] = None,
+        is_admin: Optional[int] = None
+    ) -> List[ApiUserResponse]:
+        """Get list of API_USERS records with optional filtering."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build WHERE clause dynamically
+                where_conditions = []
+                params = {}
+                
+                if username:
+                    where_conditions.append("UPPER(USERNAME) LIKE UPPER(:username)")
+                    params['username'] = f"%{username}%"
+                
+                if email:
+                    where_conditions.append("UPPER(EMAIL) LIKE UPPER(:email)")
+                    params['email'] = f"%{email}%"
+                
+                if is_active is not None:
+                    where_conditions.append("IS_ACTIVE = :is_active")
+                    params['is_active'] = is_active
+                
+                if is_admin is not None:
+                    where_conditions.append("IS_ADMIN = :is_admin")
+                    params['is_admin'] = is_admin
+                
+                where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+                
+                select_sql = f"""
+                SELECT 
+                    USER_ID,
+                    USERNAME,
+                    EMAIL,
+                    FULL_NAME,
+                    IS_ACTIVE,
+                    IS_ADMIN,
+                    CREATED_DATE,
+                    LAST_LOGIN,
+                    FAILED_LOGIN_ATTEMPTS,
+                    LOCKED_UNTIL
+                FROM {self.config.db_schema}.API_USERS
+                WHERE {where_clause}
+                ORDER BY USERNAME
+                OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+                """
+                
+                params['offset'] = offset
+                params['limit'] = limit
+                
+                cursor.execute(select_sql, params)
+                results = cursor.fetchall()
+                
+                users = []
+                for result in results:
+                    users.append(ApiUserResponse(
+                        user_id=result[0],
+                        username=result[1],
+                        email=result[2],
+                        full_name=result[3],
+                        is_active=result[4],
+                        is_admin=result[5],
+                        created_date=result[6],
+                        last_login=result[7],
+                        failed_login_attempts=result[8] if result[8] is not None else 0,
+                        locked_until=result[9]
+                    ))
+                
+                return users
+                
+        except Exception as e:
+            logger.error(f"Failed to get API_USERS list: {e}")
+            raise
+    
+    def get_api_users_count(
+        self,
+        username: Optional[str] = None,
+        email: Optional[str] = None,
+        is_active: Optional[int] = None,
+        is_admin: Optional[int] = None
+    ) -> int:
+        """Get count of API_USERS records with optional filtering."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build WHERE clause dynamically (same as get_api_users)
+                where_conditions = []
+                params = {}
+                
+                if username:
+                    where_conditions.append("UPPER(USERNAME) LIKE UPPER(:username)")
+                    params['username'] = f"%{username}%"
+                
+                if email:
+                    where_conditions.append("UPPER(EMAIL) LIKE UPPER(:email)")
+                    params['email'] = f"%{email}%"
+                
+                if is_active is not None:
+                    where_conditions.append("IS_ACTIVE = :is_active")
+                    params['is_active'] = is_active
+                
+                if is_admin is not None:
+                    where_conditions.append("IS_ADMIN = :is_admin")
+                    params['is_admin'] = is_admin
+                
+                where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+                
+                count_sql = f"""
+                SELECT COUNT(*)
+                FROM {self.config.db_schema}.API_USERS
+                WHERE {where_clause}
+                """
+                
+                cursor.execute(count_sql, params)
+                result = cursor.fetchone()
+                return result[0] if result else 0
+                
+        except Exception as e:
+            logger.error(f"Failed to get API_USERS count: {e}")
+            raise
+    
+    def update_api_user(self, user_id: int, user: ApiUserUpdate) -> bool:
+        """Update an API_USERS record. Password will be hashed if provided."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Build UPDATE fields dynamically
+                update_fields = []
+                params = {'user_id': user_id}
+                
+                if user.username is not None:
+                    update_fields.append("USERNAME = :username")
+                    params['username'] = user.username
+                
+                if user.email is not None:
+                    update_fields.append("EMAIL = :email")
+                    params['email'] = user.email
+                
+                if user.full_name is not None:
+                    update_fields.append("FULL_NAME = :full_name")
+                    params['full_name'] = user.full_name
+                
+                if user.password is not None:
+                    # Hash password using bcrypt (same logic as create_api_user)
+                    password_bytes = user.password.encode('utf-8')
+                    password_hash = bcrypt.hashpw(password_bytes, bcrypt.gensalt(rounds=12)).decode('utf-8')
+                    update_fields.append("PASSWORD_HASH = :password_hash")
+                    params['password_hash'] = password_hash
+                
+                if user.is_active is not None:
+                    update_fields.append("IS_ACTIVE = :is_active")
+                    params['is_active'] = user.is_active
+                
+                if user.is_admin is not None:
+                    update_fields.append("IS_ADMIN = :is_admin")
+                    params['is_admin'] = user.is_admin
+                
+                if not update_fields:
+                    logger.warning(f"No fields to update for API_USERS {user_id}")
+                    return False
+                
+                update_sql = f"""
+                UPDATE {self.config.db_schema}.API_USERS
+                SET {', '.join(update_fields)}
+                WHERE USER_ID = :user_id
+                """
+                
+                cursor.execute(update_sql, params)
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Updated API_USERS {user_id}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to update API_USERS record {user_id}: {e}")
+            raise
+    
+    def delete_api_user(self, user_id: int) -> bool:
+        """Delete an API_USERS record by USER_ID."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                delete_sql = f"""
+                DELETE FROM {self.config.db_schema}.API_USERS
+                WHERE USER_ID = :user_id
+                """
+                
+                cursor.execute(delete_sql, {'user_id': user_id})
+                conn.commit()
+                
+                rows_affected = cursor.rowcount
+                logger.info(f"Deleted API_USERS {user_id}, rows affected: {rows_affected}")
+                return rows_affected > 0
+                
+        except Exception as e:
+            logger.error(f"Failed to delete API_USERS record {user_id}: {e}")
             raise
